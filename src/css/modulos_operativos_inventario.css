@@ -1,0 +1,71 @@
+/*
+==========================================================
+SIZ | ESTILOS DE OPERATIVOS E INVENTARIO
+==========================================================
+
+Uso recomendado en tu HTML principal:
+
+<link rel="stylesheet" href="./css/modulos_operativos_inventario.css">
+
+Los estilos están encapsulados dentro de:
+- .operative-page
+- .inventory-page
+==========================================================
+*/
+
+/* ======================================================
+   OPERATIVOS
+====================================================== */
+
+
+
+      
+       
+
+        .step-panel, .operation-flow-card, .record-card, .accordion-card, .review-card,
+        .case-search, .selected-case, .operation-search, .operation-selected,
+        .new-operation-journey, .operation-success__card, .operation-result-card,
+        .operation-history, .activity-card {
+            border: 1px solid var(--op-border);
+            border-radius: 18px;
+            background: var(--op-surface);
+            box-shadow: 0 8px 24px rgba(28, 74, 83, .055);
+        }
+        .step-panel { padding: clamp(18px, 2.6vw, 28px); }
+        .step-panel__header, .record-card__header, .accordion-card__header,
+        .activity-card__header, .case-section__header, .activity-subsection__header,
+        .operation-history__header, .new-operation-journey__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+        .step-panel__header h2, .record-card__header h3, .activity-card__header h3 { margin: 0; }
+
+        .operation-flow__options, .review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+        .operation-flow-card { padding: 20px; cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+        .operation-flow-card:hover { transform: translateY(-2px); border-color: #9bc8c0; box-shadow: 0 14px 28px rgba(22, 109, 99, .12); }
+        .operation-flow-card__content h3 { margin: 0 0 7px; }
+        .operation-flow-card__content p { margin: 0; color: var(--op-muted); }
+        .operation-flow-card__arrow { color: var(--op-primary); font-size: 1.35rem; font-weight: 800; }
+      
+
+        @media (max-width: 820px) {
+            .operative-header { flex-direction: column; }
+            .operative-header__actions { width: 100%; }
+            .operative-header__actions .button { flex: 1 1 180px; }
+            .wizard-progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .form-grid, .operation-search-grid, .activity-housing { grid-template-columns: 1fr; }
+            .subrecord-row, .subrecord-row--consumption { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 520px) {
+            .operative-page { padding: 12px; }
+            .wizard-progress { grid-template-columns: 1fr; }
+            .wizard-progress__title { white-space: normal; }
+            .operative-page .button { width: 100%; }
+            .wizard-footer { flex-direction: column-reverse; align-items: stretch; }
+        }
+
+
+ 

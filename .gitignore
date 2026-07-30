@@ -1,0 +1,30 @@
+# Configuración local
+config.js
+
+# Variables locales
+.env
+.env.*
+!.env.example
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Dependencias
+node_modules/
+
+# Archivos temporales
+*.log
+*.tmp
+*.temp
+
+# Cobertura
+coverage/
+
+# Builds
+dist/
+build/
