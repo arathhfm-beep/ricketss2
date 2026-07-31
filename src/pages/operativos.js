@@ -238,9 +238,12 @@ function crearActividadInicial() {
 function crearInsumoInicial() {
     return {
         lote_id: null,
-        modo_captura: "CANTIDAD",
+
+        tipo_captura: "UNIDAD_BASE",
+
         cantidad_capturada: 0,
         cantidad: 0,
+
         unidad: null,
         presentacion: null,
         contenido_presentacion: null,
@@ -1049,8 +1052,7 @@ function crearTarjetaManzana(manzana, indiceSector, indiceManzana) {
                     ${crearCampoResumen("viviendas_cerradas", "Viviendas cerradas", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_deshabitadas", "Viviendas deshabitadas", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_renuentes", "Viviendas renuentes", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("lotes_baldios", "Lotes baldíos", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("otros_inmuebles", "Otros inmuebles", resumen, indiceSector, indiceManzana)}
+                    
                     ${crearCampoResumen("habitantes_beneficiados", "Habitantes beneficiados", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_con_perros", "Viviendas con perros", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_con_gatos", "Viviendas con gatos", resumen, indiceSector, indiceManzana)}
@@ -1221,7 +1223,9 @@ function crearTarjetaActividad(actividad, indiceSector, indiceManzana, indiceAct
                 </div>
             </div>
 
-            ${crearFormularioInsumos(actividad, indiceSector, indiceManzana, indiceActividad)}
+            ${actividadPermiteInsumos(actividad.tipo_actividad_id)
+                ? crearFormularioInsumos(actividad, indiceSector, indiceManzana, indiceActividad)
+                : ""}
         </section>
     `;
 }
@@ -1336,16 +1340,43 @@ function crearCampoActividadNumero(campo, etiqueta, actividad, indiceSector, ind
     `;
 }
 
-function crearFormularioInsumos(actividad, indiceSector, indiceManzana, indiceActividad) {
+function actividadPermiteInsumos(tipoActividadId) {
+    const codigo = String(
+        obtenerCodigoTipoActividad(tipoActividadId) || ""
+    )
+        .trim()
+        .toUpperCase();
+
+    return (
+        codigo.includes("ECTO") ||
+        codigo.includes("DESPARAS") ||
+        codigo.includes("TRATAMIENTO") ||
+        codigo.includes("ROCI") ||
+        codigo.includes("INSECTICIDA")
+    );
+}
+
+function crearFormularioInsumos(
+    actividad,
+    indiceSector,
+    indiceManzana,
+    indiceActividad
+) {
     return `
         <div class="activity-subsection">
+
             <div class="activity-subsection__header">
+
                 <div>
                     <h4>Consumo de insumos</h4>
+
                     <p class="inventory-consumption-help">
-                        Seleccione el lote. La presentación, unidad y existencia se determinan automáticamente.
+                        Seleccione el lote. La presentación,
+                        unidad y existencia se determinan
+                        automáticamente.
                     </p>
                 </div>
+
                 <button
                     class="button button--secondary"
                     type="button"
@@ -1353,111 +1384,329 @@ function crearFormularioInsumos(actividad, indiceSector, indiceManzana, indiceAc
                     data-sector-index="${indiceSector}"
                     data-manzana-index="${indiceManzana}"
                     data-actividad-index="${indiceActividad}"
-                >Agregar insumo</button>
+                >
+                    Agregar insumo
+                </button>
+
             </div>
 
             <div class="subrecord-list">
-                ${actividad.insumos.length === 0
-                    ? `<p class="empty-message">No hay insumos registrados.</p>`
-                    : actividad.insumos.map((insumo, indiceInsumo) => {
-                        const lote = obtenerLoteInventario(insumo.lote_id);
-                        const unidad = obtenerUnidadLote(lote) || insumo.unidad || "";
-                        const presentacion = obtenerPresentacionLote(lote) || insumo.presentacion || "Sin presentación";
-                        const contenido = obtenerContenidoPresentacion(lote);
-                        const existencia = obtenerExistenciaLote(lote);
-                        const cantidadCapturada = decimalSeguro(
-                            insumo.cantidad_capturada ?? insumo.cantidad
-                        );
-                        const cantidadBase = calcularCantidadBaseConsumo(
-                            insumo.modo_captura,
-                            cantidadCapturada,
-                            contenido
-                        );
-                        const existenciaPosterior = Math.max(0, existencia - cantidadBase);
 
-                        return `
-                        <div class="subrecord-row subrecord-row--consumption">
-                            <div class="form-group form-group--full">
-                                <label>Insumo, presentación y lote</label>
-                                <select
-                                    data-insumo-campo="lote_id"
-                                    data-sector-index="${indiceSector}"
-                                    data-manzana-index="${indiceManzana}"
-                                    data-actividad-index="${indiceActividad}"
-                                    data-insumo-index="${indiceInsumo}"
-                                >
-                                    <option value="">Seleccione</option>
-                                    ${ESTADO.inventario.map(item => `
-                                        <option
-                                            value="${escaparHTML(item.lote_id)}"
-                                            ${item.lote_id === insumo.lote_id ? "selected" : ""}
-                                        >${escaparHTML(crearEtiquetaLoteInventario(item))}</option>
-                                    `).join("")}
-                                </select>
-                            </div>
+                ${
+                    actividad.insumos.length === 0
+                        ? `
+                            <p class="empty-message">
+                                No hay insumos registrados.
+                            </p>
+                        `
+                        : actividad.insumos
+                            .map(
+                                (
+                                    insumo,
+                                    indiceInsumo
+                                ) => {
+                                    const lote =
+                                        obtenerLoteInventario(
+                                            insumo.lote_id
+                                        );
 
-                            <div class="form-group">
-                                <label>Modo de captura</label>
-                                <select
-                                    data-insumo-campo="modo_captura"
-                                    data-sector-index="${indiceSector}"
-                                    data-manzana-index="${indiceManzana}"
-                                    data-actividad-index="${indiceActividad}"
-                                    data-insumo-index="${indiceInsumo}"
-                                    ${!insumo.lote_id ? "disabled" : ""}
-                                >
-                                    <option value="CANTIDAD" ${insumo.modo_captura !== "PRESENTACIONES" ? "selected" : ""}>
-                                        Cantidad en ${escaparHTML(unidad || "unidad base")}
-                                    </option>
-                                    <option value="PRESENTACIONES" ${insumo.modo_captura === "PRESENTACIONES" ? "selected" : ""} ${contenido > 0 ? "" : "disabled"}>
-                                        Presentaciones completas
-                                    </option>
-                                </select>
-                            </div>
+                                    const unidad =
+                                        obtenerUnidadLote(
+                                            lote
+                                        ) ||
+                                        insumo.unidad ||
+                                        "";
 
-                            <div class="form-group">
-                                <label>${insumo.modo_captura === "PRESENTACIONES" ? "Número de presentaciones" : "Cantidad utilizada"}</label>
-                                <input
-                                    type="number"
-                                    min="${insumo.modo_captura === "PRESENTACIONES" ? "1" : "0.001"}"
-                                    step="${insumo.modo_captura === "PRESENTACIONES" ? "1" : "0.001"}"
-                                    value="${cantidadCapturada}"
-                                    data-insumo-campo="cantidad_capturada"
-                                    data-sector-index="${indiceSector}"
-                                    data-manzana-index="${indiceManzana}"
-                                    data-actividad-index="${indiceActividad}"
-                                    data-insumo-index="${indiceInsumo}"
-                                    ${!insumo.lote_id ? "disabled" : ""}
-                                >
-                            </div>
+                                    const presentacion =
+                                        obtenerPresentacionLote(
+                                            lote
+                                        ) ||
+                                        insumo.presentacion ||
+                                        "Sin presentación";
 
-                            <div class="form-group">
-                                <label>Unidad</label>
-                                <div class="readonly-field">${escaparHTML(
-                                    insumo.modo_captura === "PRESENTACIONES"
-                                        ? presentacion
-                                        : unidad || "—"
-                                )}</div>
-                            </div>
+                                    const contenido =
+                                        obtenerContenidoPresentacion(
+                                            lote
+                                        );
 
-                            <div class="consumption-summary form-group--full">
-                                <span><strong>Presentación:</strong> ${escaparHTML(presentacion)}</span>
-                                <span><strong>Disponible:</strong> ${formatearCantidad(existencia)} ${escaparHTML(unidad)}</span>
-                                <span><strong>Se descontará:</strong> ${formatearCantidad(cantidadBase)} ${escaparHTML(unidad)}</span>
-                                <span><strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}</span>
-                            </div>
+                                    const existencia =
+                                        obtenerExistenciaLote(
+                                            lote
+                                        );
 
-                            <button
-                                class="button button--danger"
-                                type="button"
-                                data-eliminar-insumo="${indiceInsumo}"
-                                data-sector-index="${indiceSector}"
-                                data-manzana-index="${indiceManzana}"
-                                data-actividad-index="${indiceActividad}"
-                            >Eliminar</button>
-                        </div>`;
-                    }).join("")}
+                                    const tipoCaptura =
+                                        insumo.tipo_captura ||
+                                        "UNIDAD_BASE";
+
+                                    const cantidadCapturada =
+                                        decimalSeguro(
+                                            insumo
+                                                .cantidad_capturada ??
+                                            insumo.cantidad
+                                        );
+
+                                    const cantidadBase =
+                                        calcularCantidadBaseConsumo(
+                                            tipoCaptura,
+                                            cantidadCapturada,
+                                            contenido
+                                        );
+
+                                    const existenciaPosterior =
+                                        existencia -
+                                        cantidadBase;
+
+                                    return `
+                                        <div
+                                            class="
+                                                subrecord-row
+                                                subrecord-row--consumption
+                                            "
+                                        >
+
+                                            <div
+                                                class="
+                                                    form-group
+                                                    form-group--full
+                                                "
+                                            >
+                                                <label>
+                                                    Insumo, presentación y lote
+                                                </label>
+
+                                                <select
+                                                    data-insumo-campo="lote_id"
+                                                    data-sector-index="${indiceSector}"
+                                                    data-manzana-index="${indiceManzana}"
+                                                    data-actividad-index="${indiceActividad}"
+                                                    data-insumo-index="${indiceInsumo}"
+                                                >
+                                                    <option value="">
+                                                        Seleccione
+                                                    </option>
+
+                                                    ${ESTADO.inventario
+                                                        .map(
+                                                            item => `
+                                                                <option
+                                                                    value="${escaparHTML(
+                                                                        item.lote_id
+                                                                    )}"
+                                                                    ${
+                                                                        item.lote_id ===
+                                                                        insumo.lote_id
+                                                                            ? "selected"
+                                                                            : ""
+                                                                    }
+                                                                >
+                                                                    ${escaparHTML(
+                                                                        crearEtiquetaLoteInventario(
+                                                                            item
+                                                                        )
+                                                                    )}
+                                                                </option>
+                                                            `
+                                                        )
+                                                        .join("")}
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label>
+                                                    Modo de captura
+                                                </label>
+
+                                                <select
+                                                    data-insumo-campo="tipo_captura"
+                                                    data-sector-index="${indiceSector}"
+                                                    data-manzana-index="${indiceManzana}"
+                                                    data-actividad-index="${indiceActividad}"
+                                                    data-insumo-index="${indiceInsumo}"
+                                                    ${
+                                                        !insumo.lote_id
+                                                            ? "disabled"
+                                                            : ""
+                                                    }
+                                                >
+                                                    <option
+                                                        value="UNIDAD_BASE"
+                                                        ${
+                                                            tipoCaptura !==
+                                                            "PRESENTACION"
+                                                                ? "selected"
+                                                                : ""
+                                                        }
+                                                    >
+                                                        Cantidad base
+                                                        (${escaparHTML(
+                                                            unidad ||
+                                                            "unidad"
+                                                        )})
+                                                    </option>
+
+                                                    <option
+                                                        value="PRESENTACION"
+                                                        ${
+                                                            tipoCaptura ===
+                                                            "PRESENTACION"
+                                                                ? "selected"
+                                                                : ""
+                                                        }
+                                                        ${
+                                                            contenido > 0
+                                                                ? ""
+                                                                : "disabled"
+                                                        }
+                                                    >
+                                                        Por pieza /
+                                                        presentación
+                                                    </option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label>
+                                                    ${
+                                                        tipoCaptura ===
+                                                        "PRESENTACION"
+                                                            ? "Número de piezas / presentaciones"
+                                                            : "Cantidad utilizada"
+                                                    }
+                                                </label>
+
+                                                <input
+                                                    type="number"
+                                                    min="${
+                                                        tipoCaptura ===
+                                                        "PRESENTACION"
+                                                            ? "1"
+                                                            : "0.000001"
+                                                    }"
+                                                    step="${
+                                                        tipoCaptura ===
+                                                        "PRESENTACION"
+                                                            ? "1"
+                                                            : "0.000001"
+                                                    }"
+                                                    value="${cantidadCapturada}"
+                                                    data-insumo-campo="cantidad_capturada"
+                                                    data-sector-index="${indiceSector}"
+                                                    data-manzana-index="${indiceManzana}"
+                                                    data-actividad-index="${indiceActividad}"
+                                                    data-insumo-index="${indiceInsumo}"
+                                                    ${
+                                                        !insumo.lote_id
+                                                            ? "disabled"
+                                                            : ""
+                                                    }
+                                                >
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label>Unidad</label>
+
+                                                <div class="readonly-field">
+                                                    ${escaparHTML(
+                                                        tipoCaptura ===
+                                                        "PRESENTACION"
+                                                            ? presentacion
+                                                            : unidad ||
+                                                              "—"
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div
+                                                class="
+                                                    consumption-summary
+                                                    form-group--full
+                                                "
+                                                data-consumption-summary="true"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-insumo-index="${indiceInsumo}"
+                                            >
+                                                <span>
+                                                    <strong>
+                                                        Presentación:
+                                                    </strong>
+
+                                                    ${escaparHTML(
+                                                        presentacion
+                                                    )}
+                                                </span>
+
+                                                <span>
+                                                    <strong>
+                                                        Disponible:
+                                                    </strong>
+
+                                                    ${formatearCantidad(
+                                                        existencia
+                                                    )}
+
+                                                    ${escaparHTML(
+                                                        unidad
+                                                    )}
+                                                </span>
+
+                                                <span
+                                                    data-consumption-base
+                                                >
+                                                    <strong>
+                                                        Se descontará:
+                                                    </strong>
+
+                                                    ${formatearCantidad(
+                                                        cantidadBase
+                                                    )}
+
+                                                    ${escaparHTML(
+                                                        unidad
+                                                    )}
+                                                </span>
+
+                                                <span
+                                                    data-consumption-after
+                                                >
+                                                    <strong>
+                                                        Existencia posterior:
+                                                    </strong>
+
+                                                    ${formatearCantidad(
+                                                        existenciaPosterior
+                                                    )}
+
+                                                    ${escaparHTML(
+                                                        unidad
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                class="
+                                                    button
+                                                    button--danger
+                                                "
+                                                type="button"
+                                                data-eliminar-insumo="${indiceInsumo}"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                            >
+                                                Eliminar
+                                            </button>
+
+                                        </div>
+                                    `;
+                                }
+                            )
+                            .join("")
+                }
+
             </div>
+
         </div>
     `;
 }
@@ -1503,7 +1752,7 @@ function crearEtiquetaLoteInventario(item) {
 
 function calcularCantidadBaseConsumo(modo, cantidadCapturada, contenidoPresentacion) {
     const cantidad = decimalSeguro(cantidadCapturada);
-    if (String(modo).toUpperCase() === "PRESENTACIONES") {
+    if (String(modo).toUpperCase() === "PRESENTACION") {
         return cantidad * decimalSeguro(contenidoPresentacion);
     }
     return cantidad;
@@ -1815,20 +2064,63 @@ function registrarEventosActividades() {
                 insumo.presentacion = obtenerPresentacionLote(lote);
                 insumo.contenido_presentacion = obtenerContenidoPresentacion(lote);
                 insumo.existencia_disponible = obtenerExistenciaLote(lote);
-                insumo.modo_captura = "CANTIDAD";
+                insumo.tipo_captura = "UNIDAD_BASE";
                 insumo.cantidad_capturada = 0;
             }
 
             const contenido = decimalSeguro(insumo.contenido_presentacion);
             insumo.cantidad = calcularCantidadBaseConsumo(
-                insumo.modo_captura,
+                insumo.tipo_captura,
                 insumo.cantidad_capturada,
                 contenido
             );
 
+            if (campo === "cantidad_capturada") {
+                actualizarResumenConsumoEnFila(elemento, insumo);
+                return;
+            }
+
+            const posicionScroll = window.scrollY;
             renderizarCapturaJornadaActual();
+            requestAnimationFrame(() => {
+                window.scrollTo({
+                    top: posicionScroll,
+                    behavior: "auto"
+                });
+            });
         });
     });
+}
+
+function actualizarResumenConsumoEnFila(elemento, insumo) {
+    const selector = [
+        '[data-consumption-summary="true"]',
+        `[data-sector-index="${elemento.dataset.sectorIndex}"]`,
+        `[data-manzana-index="${elemento.dataset.manzanaIndex}"]`,
+        `[data-actividad-index="${elemento.dataset.actividadIndex}"]`,
+        `[data-insumo-index="${elemento.dataset.insumoIndex}"]`
+    ].join("");
+
+    const resumen = document.querySelector(selector);
+    if (!resumen) {
+        return;
+    }
+
+    const existencia = decimalSeguro(insumo.existencia_disponible);
+    const cantidadBase = decimalSeguro(insumo.cantidad);
+    const unidad = normalizarTexto(insumo.unidad) || "";
+    const existenciaPosterior = Math.max(0, existencia - cantidadBase);
+
+    const base = resumen.querySelector("[data-consumption-base]");
+    const posterior = resumen.querySelector("[data-consumption-after]");
+
+    if (base) {
+        base.innerHTML = `<strong>Se descontará:</strong> ${formatearCantidad(cantidadBase)} ${escaparHTML(unidad)}`;
+    }
+
+    if (posterior) {
+        posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
+    }
 }
 
 function irPasoAnterior() {
@@ -1973,14 +2265,14 @@ function validarActividades() {
                     }
 
                     if (
-                        insumo.modo_captura === "PRESENTACIONES" &&
+                        insumo.tipo_captura === "PRESENTACION" &&
                         !Number.isInteger(cantidadCapturada)
                     ) {
                         throw new Error("Las presentaciones completas deben capturarse con números enteros.");
                     }
 
                     if (
-                        insumo.modo_captura === "PRESENTACIONES" &&
+                        insumo.tipo_captura === "PRESENTACION" &&
                         contenido <= 0
                     ) {
                         throw new Error("El lote seleccionado no tiene configurado el contenido de su presentación.");
@@ -1988,7 +2280,7 @@ function validarActividades() {
 
                     insumo.unidad = obtenerUnidadLote(lote);
                     insumo.cantidad = calcularCantidadBaseConsumo(
-                        insumo.modo_captura,
+                        insumo.tipo_captura,
                         cantidadCapturada,
                         contenido
                     );

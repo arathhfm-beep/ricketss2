@@ -892,11 +892,6 @@ function construirResumenManzana(
                 datos.viviendas_renuentes
             ),
 
-        lotes_baldios:
-            normalizarEntero(
-                datos.lotes_baldios
-            ),
-
         otros_inmuebles:
             normalizarEntero(
                 datos.otros_inmuebles
@@ -1114,25 +1109,87 @@ function construirInsumoActividad(
             insumo
         );
 
-    const cantidad =
-        normalizarDecimal(
-            datos.cantidad
-        );
+    const tipoCaptura =
+        String(
+            normalizarTexto(
+                datos.tipo_captura
+            ) ||
+            "UNIDAD_BASE"
+        )
+            .trim()
+            .toUpperCase();
 
-    if (cantidad <= 0) {
+    if (
+        ![
+            "PRESENTACION",
+            "UNIDAD_BASE"
+        ].includes(tipoCaptura)
+    ) {
         throw new Error(
-            `La cantidad del insumo ${indice + 1} debe ser mayor que cero.`
+            `El tipo de captura del insumo ${
+                indice + 1
+            } no es válido.`
         );
     }
+
+    const cantidadCapturada =
+        normalizarDecimal(
+            datos.cantidad_capturada
+        );
+
+    const contenidoPresentacion =
+        normalizarDecimal(
+            datos.contenido_presentacion,
+            0
+        );
+
+    if (cantidadCapturada <= 0) {
+        throw new Error(
+            `La cantidad del insumo ${
+                indice + 1
+            } debe ser mayor que cero.`
+        );
+    }
+
+    if (
+        tipoCaptura === "PRESENTACION" &&
+        contenidoPresentacion <= 0
+    ) {
+        throw new Error(
+            `El insumo ${
+                indice + 1
+            } no tiene una conversión de presentación válida.`
+        );
+    }
+
+    const cantidadBase =
+        tipoCaptura === "PRESENTACION"
+            ? cantidadCapturada *
+              contenidoPresentacion
+            : cantidadCapturada;
 
     return {
         lote_id:
             validarUUID(
                 datos.lote_id,
-                `lote del insumo ${indice + 1}`
+                `lote del insumo ${
+                    indice + 1
+                }`
             ),
 
-        cantidad,
+        cantidad:
+            cantidadBase,
+
+        cantidad_capturada:
+            cantidadCapturada,
+
+        tipo_captura:
+            tipoCaptura,
+
+        contenido_presentacion:
+            tipoCaptura === "PRESENTACION"
+                ? contenidoPresentacion
+                : null,
 
         unidad:
             normalizarTexto(
@@ -1140,7 +1197,6 @@ function construirInsumoActividad(
             )
     };
 }
-
 
 function validarManzanasDuplicadas(
     sectores

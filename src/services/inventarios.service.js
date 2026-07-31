@@ -1,114 +1,59 @@
 import { supabase } from "./supabase.js";
 
-/*
-==========================================================
-UTILIDADES
-==========================================================
-*/
-
 function validarToken(token) {
     if (!token || typeof token !== "string") {
         throw new Error("No existe una sesión activa.");
     }
 }
 
-function normalizarTexto(valor) {
-    if (valor === undefined || valor === null) {
-        return null;
-    }
-
-    const texto = String(valor).trim();
-
-    return texto === "" ? null : texto;
+function texto(valor) {
+    if (valor === undefined || valor === null) return null;
+    const resultado = String(valor).trim();
+    return resultado || null;
 }
 
-function normalizarUUID(valor) {
-    return normalizarTexto(valor);
+function numero(valor) {
+    if (valor === undefined || valor === null || valor === "") return null;
+    const resultado = Number(valor);
+    if (!Number.isFinite(resultado)) throw new Error("Cantidad inválida.");
+    return resultado;
 }
 
-function normalizarFecha(valor) {
-    return normalizarTexto(valor);
-}
-
-function normalizarNumero(valor) {
-    if (valor === null || valor === undefined || valor === "") {
-        return null;
-    }
-
-    const numero = Number(valor);
-
-    if (!Number.isFinite(numero)) {
-        throw new Error("Cantidad inválida.");
-    }
-
-    return numero;
+function unidad(valor) {
+    const resultado = texto(valor)?.toUpperCase() || null;
+    return resultado;
 }
 
 function validarRespuesta(data, mensaje) {
-
-    if (!data) {
-        throw new Error(mensaje);
-    }
-
-    if (data.ok === false) {
-        throw new Error(
-            data.mensaje || mensaje
-        );
-    }
-
+    if (!data) throw new Error(mensaje);
+    if (data.ok === false) throw new Error(data.mensaje || mensaje);
     return data;
 }
 
 function crearError(error, mensaje) {
-
-    if (error?.message) {
-        return new Error(error.message);
-    }
-
-    return new Error(mensaje);
+    return new Error(error?.message || mensaje);
 }
 
-/*
-==========================================================
-CATÁLOGOS
-==========================================================
-*/
+async function rpc(nombre, parametros, mensaje) {
+    const { data, error } = await supabase.rpc(nombre, parametros);
+    if (error) throw crearError(error, mensaje);
+    return validarRespuesta(data, mensaje);
+}
 
-export async function obtenerCatalogosInventario(
-    token
-) {
+export async function obtenerCatalogosInventario(token) {
     validarToken(token);
 
-    const [
-        catalogosResultado,
-        presentacionesResultado
-    ] = await Promise.all([
-        supabase.rpc(
-            "obtener_catalogos_inventario",
-            {
-                p_token: token
-            }
-        ),
-        supabase.rpc(
-            "obtener_presentaciones_inventario",
-            {
-                p_token: token
-            }
-        )
+    const [catalogosResultado, presentacionesResultado] = await Promise.all([
+        supabase.rpc("obtener_catalogos_inventario", { p_token: token }),
+        supabase.rpc("obtener_presentaciones_inventario", { p_token: token })
     ]);
 
     if (catalogosResultado.error) {
-        throw crearError(
-            catalogosResultado.error,
-            "No fue posible obtener los catálogos."
-        );
+        throw crearError(catalogosResultado.error, "No fue posible obtener los catálogos.");
     }
 
     if (presentacionesResultado.error) {
-        throw crearError(
-            presentacionesResultado.error,
-            "No fue posible obtener las presentaciones."
-        );
+        throw crearError(presentacionesResultado.error, "No fue posible obtener las presentaciones.");
     }
 
     const catalogos = validarRespuesta(
@@ -123,433 +68,183 @@ export async function obtenerCatalogosInventario(
 
     return {
         ...catalogos,
-        presentaciones:
-            Array.isArray(
-                presentaciones.presentaciones
-            )
-                ? presentaciones.presentaciones
-                : []
+        presentaciones: Array.isArray(presentaciones.presentaciones)
+            ? presentaciones.presentaciones
+            : []
     };
 }
 
-/*
-==========================================================
-REGISTRAR PRESENTACIÓN
-==========================================================
-*/
-
-export async function registrarPresentacionProducto(
-    token,
-    datos
-) {
+export async function registrarProductoInventario(token, datos) {
     validarToken(token);
 
-    const payload = {
-        producto_id: normalizarUUID(datos.producto_id),
-        nombre: normalizarTexto(datos.nombre),
-        contenido: normalizarNumero(datos.contenido),
-        unidad_medida: normalizarTexto(datos.unidad_medida)
-    };
+    return rpc(
+        "registrar_producto_inventario",
+        {
+            p_token: token,
+            p_payload: {
+                nombre: texto(datos.nombre),
+                categoria_id: texto(datos.categoria_id),
+                categoria_codigo: texto(datos.categoria_codigo),
+                categoria: texto(datos.categoria),
+                observaciones: texto(datos.observaciones)
+            }
+        },
+        "No fue posible registrar el insumo."
+    );
+}
 
-    const { data, error } = await supabase.rpc(
+export async function registrarPresentacionProducto(token, datos) {
+    validarToken(token);
+
+    return rpc(
         "registrar_presentacion_producto",
         {
             p_token: token,
-            p_payload: payload
-        }
-    );
-
-    if (error) {
-        throw crearError(
-            error,
-            "No fue posible registrar la presentación."
-        );
-    }
-
-    return validarRespuesta(
-        data,
+            p_payload: {
+                producto_id: texto(datos.producto_id),
+                nombre: texto(datos.nombre),
+                contenido: numero(datos.contenido),
+                unidad_medida: unidad(datos.unidad_medida)
+            }
+        },
         "No fue posible registrar la presentación."
     );
 }
 
-/*
-==========================================================
-REGISTRAR LOTE
-==========================================================
-*/
-
-export async function registrarLote(
-    token,
-    datos
-) {
-
+export async function registrarRecepcionInventario(token, datos) {
     validarToken(token);
 
-    const payload = {
-
-        producto_id:
-            normalizarUUID(
-                datos.producto_id
-            ),
-
-        lote:
-            normalizarTexto(
-                datos.lote
-            ),
-
-        presentacion_id:
-            normalizarUUID(
-                datos.presentacion_id
-            ),
-
-        presentacion:
-            normalizarTexto(
-                datos.presentacion
-            ),
-
-        unidad_medida:
-            normalizarTexto(
-                datos.unidad_medida
-            ),
-
-        cantidad_inicial:
-            normalizarNumero(
-                datos.cantidad_inicial
-            ),
-
-        fecha_fabricacion:
-            normalizarFecha(
-                datos.fecha_fabricacion
-            ),
-
-        fecha_caducidad:
-            normalizarFecha(
-                datos.fecha_caducidad
-            )
-
-    };
-
-    const {
-        data,
-        error
-    } = await supabase.rpc(
-        "registrar_lote_producto",
-        {
-            p_token: token,
-            p_payload: payload
-        }
-    );
-
-    if (error) {
-
-        throw crearError(
-            error,
-            "No fue posible registrar el lote."
-        );
-
+    const cantidad = numero(datos.cantidad_capturada ?? datos.cantidad);
+    if (!cantidad || cantidad <= 0) {
+        throw new Error("La cantidad recibida debe ser mayor que cero.");
     }
 
-    return validarRespuesta(
-        data,
-        "No fue posible registrar el lote."
-    );
+    const distribuciones = Array.isArray(datos.distribuciones)
+        ? datos.distribuciones
+            .map(item => ({
+                cve_jur_res: texto(item.cve_jur_res),
+                cantidad_capturada: numero(item.cantidad_capturada),
+                tipo_captura: texto(item.tipo_captura || datos.tipo_captura)
+            }))
+            .filter(item => item.cve_jur_res && item.cantidad_capturada > 0)
+        : [];
 
+    return rpc(
+        "registrar_recepcion_inventario",
+        {
+            p_token: token,
+            p_payload: {
+                modo_lote: texto(datos.modo_lote || "NUEVO"),
+                lote_id: texto(datos.lote_id),
+                producto_id: texto(datos.producto_id),
+                presentacion_id: texto(datos.presentacion_id),
+                lote: texto(datos.lote),
+                cantidad_capturada: cantidad,
+                tipo_captura: texto(datos.tipo_captura || "PRESENTACION"),
+                fecha_fabricacion: texto(datos.fecha_fabricacion),
+                fecha_caducidad: texto(datos.fecha_caducidad),
+                observaciones: texto(datos.observaciones),
+                distribuciones
+            }
+        },
+        "No fue posible registrar la recepción."
+    );
 }
 
-/*
-==========================================================
-REGISTRAR MOVIMIENTO
-==========================================================
-*/
-
-export async function registrarMovimientoInventario(
-    token,
-    datos
-) {
-
+export async function registrarMovimientoInventario(token, datos) {
     validarToken(token);
 
-    const payload = {
+    const cantidad = numero(datos.cantidad_capturada ?? datos.cantidad);
+    if (!cantidad || cantidad <= 0) {
+        throw new Error("La cantidad debe ser mayor que cero.");
+    }
 
-        lote_id:
-            normalizarUUID(
-                datos.lote_id
-            ),
+    const tipoCaptura = (texto(datos.tipo_captura) || "UNIDAD_BASE")
+        .toUpperCase()
+        .replace("PRESENTACIONES", "PRESENTACION");
 
-        tipo_movimiento:
-            normalizarTexto(
-                datos.tipo_movimiento
-            ),
-
-        cve_jur_res:
-            normalizarTexto(
-                datos.cve_jur_res
-            ),
-
-        cantidad:
-            normalizarNumero(
-                datos.cantidad
-            ),
-
-        cantidad_capturada:
-            normalizarNumero(
-                datos.cantidad_capturada ??
-                datos.cantidad
-            ),
-
-        tipo_captura:
-            normalizarTexto(
-                datos.tipo_captura ||
-                "UNIDAD_BASE"
-            ),
-
-        referencia_id:
-            normalizarUUID(
-                datos.referencia_id
-            ),
-
-        fecha_movimiento:
-            normalizarFecha(
-                datos.fecha_movimiento
-            ),
-
-        origen_tipo:
-            normalizarTexto(
-                datos.origen_tipo
-            ),
-
-        origen_id:
-            normalizarTexto(
-                datos.origen_id
-            ),
-
-        destino_tipo:
-            normalizarTexto(
-                datos.destino_tipo
-            ),
-
-        destino_id:
-            normalizarTexto(
-                datos.destino_id
-            ),
-
-        observaciones:
-            normalizarTexto(
-                datos.observaciones
-            )
-
-    };
-
-    const {
-        data,
-        error
-    } = await supabase.rpc(
+    return rpc(
         "registrar_movimiento_inventario",
         {
             p_token: token,
-            p_payload: payload
-        }
-    );
-
-    if (error) {
-
-        throw crearError(
-            error,
-            "No fue posible registrar el movimiento."
-        );
-
-    }
-
-    return validarRespuesta(
-        data,
+            p_payload: {
+                lote_id: texto(datos.lote_id),
+                tipo_movimiento: texto(datos.tipo_movimiento),
+                cve_jur_res: texto(datos.cve_jur_res),
+                cantidad_capturada: cantidad,
+                tipo_captura: tipoCaptura,
+                referencia_id: texto(datos.referencia_id),
+                referencia_tipo: texto(datos.referencia_tipo),
+                fecha_movimiento: texto(datos.fecha_movimiento),
+                origen_tipo: texto(datos.origen_tipo),
+                origen_id: texto(datos.origen_id),
+                destino_tipo: texto(datos.destino_tipo),
+                destino_id: texto(datos.destino_id),
+                motivo: texto(datos.motivo),
+                observaciones: texto(datos.observaciones)
+            }
+        },
         "No fue posible registrar el movimiento."
     );
-
 }
 
-/*
-==========================================================
-CONSULTAR INVENTARIO
-==========================================================
-*/
-
-export async function consultarInventario(
-    token,
-    filtros = {}
-) {
-
+export async function consultarInventario(token, filtros = {}) {
     validarToken(token);
 
-    const {
-        data,
-        error
-    } = await supabase.rpc(
+    return rpc(
         "consultar_inventario",
         {
-
             p_token: token,
-
-            p_jurisdiccion:
-                normalizarTexto(
-                    filtros.jurisdiccion
-                ),
-
-            p_busqueda:
-                normalizarTexto(
-                    filtros.busqueda
-                ),
-
-            p_categoria:
-                normalizarTexto(
-                    filtros.categoria
-                ),
-
-            p_solo_disponible:
-                Boolean(
-                    filtros.solo_disponible
-                ),
-
-            p_limite:
-                Number(
-                    filtros.limite || 50
-                ),
-
-            p_offset:
-                Number(
-                    filtros.offset || 0
-                )
-
-        }
-    );
-
-    if (error) {
-
-        throw crearError(
-            error,
-            "No fue posible consultar el inventario."
-        );
-
-    }
-
-    return validarRespuesta(
-        data,
+            p_jurisdiccion: texto(filtros.jurisdiccion),
+            p_busqueda: texto(filtros.busqueda),
+            p_categoria: texto(filtros.categoria),
+            p_solo_disponible: Boolean(filtros.solo_disponible),
+            p_limite: Number(filtros.limite || 50),
+            p_offset: Number(filtros.offset || 0)
+        },
         "No fue posible consultar el inventario."
     );
-
 }
 
-/*
-==========================================================
-MOVIMIENTOS
-==========================================================
-*/
-
-export async function consultarMovimientosInventario(
-    token,
-    filtros = {}
-) {
-
+export async function consultarMovimientosInventario(token, filtros = {}) {
     validarToken(token);
 
-    const {
-        data,
-        error
-    } = await supabase.rpc(
+    return rpc(
         "consultar_movimientos_inventario",
         {
-
             p_token: token,
-
-            p_jurisdiccion:
-                normalizarTexto(
-                    filtros.jurisdiccion
-                ),
-
-            p_tipo_movimiento:
-                normalizarTexto(
-                    filtros.tipo_movimiento
-                ),
-
-            p_busqueda:
-                normalizarTexto(
-                    filtros.busqueda
-                ),
-
-            p_fecha_inicio:
-                normalizarFecha(
-                    filtros.fecha_inicio
-                ),
-
-            p_fecha_fin:
-                normalizarFecha(
-                    filtros.fecha_fin
-                ),
-
-            p_limite:
-                Number(
-                    filtros.limite || 50
-                ),
-
-            p_offset:
-                Number(
-                    filtros.offset || 0
-                )
-
-        }
-    );
-
-    if (error) {
-
-        throw crearError(
-            error,
-            "No fue posible consultar los movimientos."
-        );
-
-    }
-
-    return validarRespuesta(
-        data,
+            p_jurisdiccion: texto(filtros.jurisdiccion),
+            p_tipo_movimiento: texto(filtros.tipo_movimiento),
+            p_busqueda: texto(filtros.busqueda),
+            p_fecha_inicio: texto(filtros.fecha_inicio),
+            p_fecha_fin: texto(filtros.fecha_fin),
+            p_limite: Number(filtros.limite || 50),
+            p_offset: Number(filtros.offset || 0)
+        },
         "No fue posible consultar los movimientos."
     );
-
 }
 
-/*
-==========================================================
-RESUMEN
-==========================================================
-*/
-
-export async function obtenerResumenInventario(
-    token,
-    jurisdiccion = null
-) {
-
+export async function obtenerResumenInventario(token, jurisdiccion = null) {
     validarToken(token);
 
-    const {
-        data,
-        error
-    } = await supabase.rpc(
+    return rpc(
         "obtener_resumen_inventario",
         {
             p_token: token,
             p_jurisdiccion: jurisdiccion
-        }
-    );
-
-    if (error) {
-
-        throw crearError(
-            error,
-            "No fue posible obtener el resumen."
-        );
-
-    }
-
-    return validarRespuesta(
-        data,
+        },
         "No fue posible obtener el resumen."
     );
+}
 
+/* Compatibilidad con código anterior. */
+export async function registrarLote(token, datos) {
+    return registrarRecepcionInventario(token, {
+        ...datos,
+        modo_lote: "NUEVO",
+        cantidad_capturada: datos.cantidad_inicial,
+        tipo_captura: datos.tipo_captura_inicial || "PRESENTACION",
+        distribuciones: []
+    });
 }
