@@ -1105,16 +1105,13 @@ function construirInsumoActividad(
     indice
 ) {
     const datos =
-        obtenerObjeto(
-            insumo
-        );
+        obtenerObjeto(insumo);
 
     const tipoCaptura =
         String(
             normalizarTexto(
                 datos.tipo_captura
-            ) ||
-            "UNIDAD_BASE"
+            ) || "UNIDAD_BASE"
         )
             .trim()
             .toUpperCase();
@@ -1139,13 +1136,12 @@ function construirInsumoActividad(
 
     const contenidoPresentacion =
         normalizarDecimal(
-            datos.contenido_presentacion,
-            0
+            datos.contenido_presentacion
         );
 
     if (cantidadCapturada <= 0) {
         throw new Error(
-            `La cantidad del insumo ${
+            `La cantidad capturada del insumo ${
                 indice + 1
             } debe ser mayor que cero.`
         );
@@ -1156,9 +1152,9 @@ function construirInsumoActividad(
         contenidoPresentacion <= 0
     ) {
         throw new Error(
-            `El insumo ${
+            `La presentación del insumo ${
                 indice + 1
-            } no tiene una conversión de presentación válida.`
+            } no tiene una conversión válida.`
         );
     }
 
@@ -1177,9 +1173,16 @@ function construirInsumoActividad(
                 }`
             ),
 
+        /*
+         * Cantidad que realmente se descuenta
+         * del inventario.
+         */
         cantidad:
             cantidadBase,
 
+        /*
+         * Lo que capturó el usuario.
+         */
         cantidad_capturada:
             cantidadCapturada,
 
@@ -1194,6 +1197,11 @@ function construirInsumoActividad(
         unidad:
             normalizarTexto(
                 datos.unidad
+            ),
+
+        presentacion:
+            normalizarTexto(
+                datos.presentacion
             )
     };
 }

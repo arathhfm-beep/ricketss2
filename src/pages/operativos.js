@@ -1518,7 +1518,7 @@ function crearFormularioInsumos(
 
                                                 <select
                                                     data-insumo-campo="tipo_captura"
-                                                    data-sector-index="${indiceSector}"
+                                                    data-sector-index="${indiceSector}" 
                                                     data-manzana-index="${indiceManzana}"
                                                     data-actividad-index="${indiceActividad}"
                                                     data-insumo-index="${indiceInsumo}"
@@ -1555,7 +1555,7 @@ function crearFormularioInsumos(
                                                         ${
                                                             contenido > 0
                                                                 ? ""
-                                                                : "disabled"
+                                                                : ""
                                                         }
                                                     >
                                                         Por pieza /
@@ -1730,10 +1730,18 @@ function obtenerPresentacionLote(lote) {
 function obtenerContenidoPresentacion(lote) {
     const contenido = Number(
         lote?.contenido_presentacion ??
+        lote?.presentacion_contenido ??
+        lote?.contenido_catalogo ??
         lote?.contenido ??
-        lote?.cantidad_presentacion
+        lote?.cantidad_presentacion ??
+        lote?.presentacion?.contenido ??
+        0
     );
-    return Number.isFinite(contenido) && contenido > 0 ? contenido : 0;
+
+    return Number.isFinite(contenido) &&
+        contenido > 0
+        ? contenido
+        : 0;
 }
 
 function obtenerExistenciaLote(lote) {
@@ -2058,15 +2066,43 @@ function registrarEventosActividades() {
                 insumo[campo] = normalizarTexto(elemento.value);
             }
 
-            if (campo === "lote_id") {
-                const lote = obtenerLoteInventario(insumo.lote_id);
-                insumo.unidad = obtenerUnidadLote(lote);
-                insumo.presentacion = obtenerPresentacionLote(lote);
-                insumo.contenido_presentacion = obtenerContenidoPresentacion(lote);
-                insumo.existencia_disponible = obtenerExistenciaLote(lote);
-                insumo.tipo_captura = "UNIDAD_BASE";
-                insumo.cantidad_capturada = 0;
-            }
+           if (campo === "lote_id") {
+    const lote =
+        obtenerLoteInventario(
+            insumo.lote_id
+        );
+
+    insumo.unidad =
+        obtenerUnidadLote(
+            lote
+        );
+
+    insumo.presentacion =
+        obtenerPresentacionLote(
+            lote
+        );
+
+    insumo.contenido_presentacion =
+        obtenerContenidoPresentacion(
+            lote
+        );
+
+    insumo.existencia_disponible =
+        obtenerExistenciaLote(
+            lote
+        );
+
+    /*
+     * Al cambiar de lote se inicia en unidad base.
+     * El usuario todavía puede cambiar después
+     * a PRESENTACION desde el selector.
+     */
+    insumo.tipo_captura =
+        "UNIDAD_BASE";
+
+    insumo.cantidad_capturada = 0;
+    insumo.cantidad = 0;
+}
 
             const contenido = decimalSeguro(insumo.contenido_presentacion);
             insumo.cantidad = calcularCantidadBaseConsumo(
@@ -2236,7 +2272,6 @@ function validarResumenManzana(resumen, sector, manzana) {
         throw new Error(`En el sector ${sector}, manzana ${manzana}, la distribución por animales supera las viviendas trabajadas.`);
     }
 }
-
 function validarActividades() {
     let total = 0;
 
@@ -2244,50 +2279,115 @@ function validarActividades() {
         sector.manzanas.forEach(manzana => {
             manzana.actividades.forEach(actividad => {
                 total += 1;
+
                 if (!actividad.tipo_actividad_id) {
-                    throw new Error(`Seleccione el tipo de todas las actividades de la manzana ${manzana.manzana}.`);
+                    throw new Error(
+                        `Seleccione el tipo de todas las actividades de la manzana ${manzana.manzana}.`
+                    );
                 }
 
                 actividad.insumos.forEach(insumo => {
                     if (!insumo.lote_id) {
-                        throw new Error("Seleccione el lote de todos los insumos.");
+                        throw new Error(
+                            "Seleccione el lote de todos los insumos."
+                        );
                     }
 
-                    const lote = obtenerLoteInventario(insumo.lote_id);
-                    const contenido = obtenerContenidoPresentacion(lote);
-                    const existencia = obtenerExistenciaLote(lote);
-                    const cantidadCapturada = decimalSeguro(
-                        insumo.cantidad_capturada ?? insumo.cantidad
-                    );
+                    const lote =
+                        obtenerLoteInventario(
+                            insumo.lote_id
+                        );
+                      
+                    if (!lote) {
+                        throw new Error(
+                            "El lote seleccionado ya no está disponible."
+                        );
+                    }
+
+                    const contenido =
+                        decimalSeguro(
+                            insumo.contenido_presentacion ??
+                            obtenerContenidoPresentacion(lote)
+                        );
+
+                    const existencia =
+                        obtenerExistenciaLote(lote);
+
+                    const cantidadCapturada =
+                        decimalSeguro(
+                            insumo.cantidad_capturada ??
+                            insumo.cantidad
+                        );
+
+                    const tipoCaptura =
+                        String(
+                            insumo.tipo_captura ||
+                            "UNIDAD_BASE"
+                        )
+                            .trim()
+                            .toUpperCase();
 
                     if (cantidadCapturada <= 0) {
-                        throw new Error("La cantidad de cada insumo debe ser mayor que cero.");
+                        throw new Error(
+                            "La cantidad de cada insumo debe ser mayor que cero."
+                        );
                     }
 
                     if (
-                        insumo.tipo_captura === "PRESENTACION" &&
-                        !Number.isInteger(cantidadCapturada)
+                        tipoCaptura === "PRESENTACION" &&
+                        !Number.isInteger(
+                            cantidadCapturada
+                        )
                     ) {
-                        throw new Error("Las presentaciones completas deben capturarse con números enteros.");
+                        throw new Error(
+                            "Las presentaciones completas deben capturarse con números enteros."
+                        );
                     }
 
                     if (
-                        insumo.tipo_captura === "PRESENTACION" &&
+                        tipoCaptura === "PRESENTACION" &&
                         contenido <= 0
                     ) {
-                        throw new Error("El lote seleccionado no tiene configurado el contenido de su presentación.");
+                        throw new Error(
+                            "El lote seleccionado no tiene configurado el contenido de su presentación."
+                        );
                     }
 
-                    insumo.unidad = obtenerUnidadLote(lote);
-                    insumo.cantidad = calcularCantidadBaseConsumo(
-                        insumo.tipo_captura,
-                        cantidadCapturada,
-                        contenido
-                    );
+                    insumo.unidad =
+                        obtenerUnidadLote(lote);
 
-                    if (insumo.cantidad > existencia) {
+                    insumo.presentacion =
+                        obtenerPresentacionLote(lote);
+
+                    insumo.tipo_captura =
+                        tipoCaptura;
+
+                    insumo.cantidad_capturada =
+                        cantidadCapturada;
+
+                    insumo.contenido_presentacion =
+                        contenido;
+
+                    insumo.existencia_disponible =
+                        existencia;
+
+                    insumo.cantidad =
+                        calcularCantidadBaseConsumo(
+                            tipoCaptura,
+                            cantidadCapturada,
+                            contenido
+                        );
+
+                    if (
+                        insumo.cantidad >
+                        existencia
+                    ) {
                         throw new Error(
-                            `El consumo de ${crearEtiquetaLoteInventario(lote)} supera la existencia disponible.`
+                            `El consumo de ${
+                                crearEtiquetaLoteInventario(
+                                    lote
+                                )
+                            } supera la existencia disponible.`
                         );
                     }
                 });
@@ -2296,7 +2396,9 @@ function validarActividades() {
     });
 
     if (total === 0) {
-        throw new Error("Registre al menos una actividad.");
+        throw new Error(
+            "Registre al menos una actividad."
+        );
     }
 }
 
@@ -2812,6 +2914,7 @@ async function cargarInventario() {
             ESTADO.operativo.cve_jur_res
         );
         ESTADO.inventario = obtenerArreglo(respuesta?.inventario || respuesta?.resultados || respuesta);
+       
     } catch {
         ESTADO.inventario = [];
     }
