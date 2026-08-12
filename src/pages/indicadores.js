@@ -6,6 +6,7 @@ import {
     obtenerOperacion,
     obtenerViviendas,
     obtenerAnimales,
+    obtenerVacunacion,
     obtenerEntomologia,
     obtenerVerificaciones,
     obtenerConsumos,
@@ -246,6 +247,8 @@ function renderizarPagina() {
                 ${crearSeccionEntomologia()}
 
                 ${crearSeccionAnimales()}
+
+                ${crearSeccionVacunacion()}
 
                 ${crearSeccionVerificaciones()}
 
@@ -1014,6 +1017,40 @@ function crearSeccionAnimales() {
             datos.perros,
             "Gatos",
             datos.gatos
+        )
+    );
+}
+
+
+
+/*
+==========================================================
+VACUNACIÓN
+==========================================================
+*/
+
+function crearSeccionVacunacion() {
+    const datos =
+        obtenerVacunacion(
+            ESTADO.respuesta
+        );
+
+    return crearSeccionIndicadores(
+        "Vacunación",
+        "Folios aplicados y lotes de vacuna utilizados.",
+        [
+            ["Actividades", datos.actividades],
+            ["Folios aplicados", datos.folios],
+            ["Rangos registrados", datos.rangos],
+            ["Lotes utilizados", datos.lotes_utilizados],
+            ["Perros vacunados", datos.perros_vacunados],
+            ["Gatos vacunados", datos.gatos_vacunados]
+        ],
+        crearComparacionDosValores(
+            "Perros vacunados",
+            datos.perros_vacunados,
+            "Gatos vacunados",
+            datos.gatos_vacunados
         )
     );
 }

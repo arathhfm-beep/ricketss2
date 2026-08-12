@@ -944,15 +944,8 @@ function construirResumenManzana(
         resultado.viviendas_deshabitadas +
         resultado.viviendas_renuentes;
 
-    if (
-        resultado.viviendas_visitadas > 0 &&
-        viviendasConResultado >
-            resultado.viviendas_visitadas
-    ) {
-        throw new Error(
-            `En el sector ${sector}, manzana ${manzana}, la suma de resultados supera las viviendas visitadas.`
-        );
-    }
+    // Regla operativa: visitadas es la suma exacta de los cuatro resultados.
+    resultado.viviendas_visitadas = viviendasConResultado;
 
     const distribucionAnimales =
         resultado.viviendas_con_perros +
@@ -1013,6 +1006,21 @@ function construirActividadManzana(
         viviendas_cubiertas:
             normalizarEntero(
                 datos.viviendas_cubiertas
+            ),
+
+        viviendas_encuestadas:
+            normalizarEntero(
+                datos.viviendas_encuestadas
+            ),
+
+        viviendas_rociadas:
+            normalizarEntero(
+                datos.viviendas_rociadas
+            ),
+
+        viviendas_ectodesparasitadas:
+            normalizarEntero(
+                datos.viviendas_ectodesparasitadas
             ),
 
         perros_intervenidos:
@@ -1202,6 +1210,58 @@ function construirInsumoActividad(
         presentacion:
             normalizarTexto(
                 datos.presentacion
+            ),
+
+        rangos_folios:
+            obtenerArreglo(
+                datos.rangos_folios
+            ).map(
+                (
+                    rango,
+                    indiceRango
+                ) => {
+                    const datosRango =
+                        obtenerObjeto(
+                            rango
+                        );
+
+                    const folioDesde =
+                        normalizarEntero(
+                            datosRango.folio_desde
+                        );
+
+                    const folioHasta =
+                        normalizarEntero(
+                            datosRango.folio_hasta
+                        );
+
+                    if (
+                        folioDesde <= 0 ||
+                        folioHasta <= 0 ||
+                        folioHasta < folioDesde
+                    ) {
+                        throw new Error(
+                            `El rango de folios ${
+                                indiceRango + 1
+                            } del insumo ${
+                                indice + 1
+                            } no es válido.`
+                        );
+                    }
+
+                    return {
+                        id:
+                            normalizarTexto(
+                                datosRango.id
+                            ),
+
+                        folio_desde:
+                            folioDesde,
+
+                        folio_hasta:
+                            folioHasta
+                    };
+                }
             )
     };
 }
@@ -1234,6 +1294,65 @@ function validarManzanasDuplicadas(
 SELECTORES
 ==========================================================
 */
+
+
+
+/*
+==========================================================
+EDITAR JORNADA EXISTENTE
+==========================================================
+*/
+export async function editarJornadaOperativo(token, jornadaId, datos = {}) {
+    validarToken(token);
+    const id = validarUUID(jornadaId, "identificador de la jornada");
+    const motivoEdicion = normalizarTexto(datos.motivo_edicion);
+    if (!motivoEdicion) {
+        throw new Error("Indique el motivo de la edición.");
+    }
+
+    const payload = {
+        fecha: normalizarTexto(datos.fecha),
+        hora_inicio: normalizarTexto(datos.hora_inicio),
+        hora_fin: normalizarTexto(datos.hora_fin),
+        motivo: normalizarTexto(datos.motivo),
+        observaciones: normalizarTexto(datos.observaciones),
+        motivo_edicion: motivoEdicion,
+        manzanas: obtenerArreglo(datos.manzanas).map(m => ({
+            id: normalizarTexto(m.id),
+            sector: normalizarTexto(m.sector),
+            manzana: normalizarTexto(m.manzana),
+            fecha_inicio: normalizarTexto(m.fecha_inicio),
+            fecha_fin: normalizarTexto(m.fecha_fin),
+            estatus: normalizarTexto(m.estatus) || "TRABAJADA",
+            observaciones: normalizarTexto(m.observaciones ?? m.resumen?.observaciones),
+            resumen: construirResumenManzana(m.resumen, m.sector || "", m.manzana || ""),
+            actividades: obtenerArreglo(m.actividades).map((a, i) => {
+                const base = construirActividadManzana(a, i);
+                return {
+                    ...base,
+                    id: normalizarTexto(a.id),
+                    insumos: obtenerArreglo(a.insumos).map((insumo, j) => {
+                        if (insumo.id && !insumo.accion) {
+                            return { id: insumo.id, accion: "SIN_CAMBIO" };
+                        }
+                        const accion = String(insumo.accion || "AGREGAR").toUpperCase();
+                        if (accion === "SIN_CAMBIO") return { id: insumo.id, accion };
+                        const construido = construirInsumoActividad(insumo, j);
+                        return { ...construido, id: normalizarTexto(insumo.id), accion };
+                    })
+                };
+            })
+        }))
+    };
+
+    const { data, error } = await supabase.rpc("editar_jornada_operativo", {
+        p_token: token,
+        p_jornada_id: id,
+        p_datos: payload
+    });
+    if (error) throw crearError(error, "No fue posible editar la jornada.");
+    return validarRespuesta(data, "No fue posible editar la jornada.");
+}
 
 export function obtenerResultadosOperativosRetomar(
     respuesta

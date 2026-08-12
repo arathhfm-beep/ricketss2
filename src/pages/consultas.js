@@ -557,7 +557,7 @@ function crearTablaCasos() {
                     <th>Viviendas</th>
                 </tr>
             </thead>
-
+            
             <tbody>
                 ${registros.map(caso => `
                     <tr>
@@ -580,7 +580,7 @@ function crearTablaCasos() {
                                 caso.cve_jur_res || ""
                             )}
                         </td>
-
+                            
                         <td>
                             ${escaparHTML(
                                 caso.municipio || ""
@@ -939,7 +939,7 @@ function crearTablaOperativos() {
                     <th></th>
                 </tr>
             </thead>
-
+            
             <tbody>
                 ${registros.map(operativo => `
                     <tr>
@@ -990,19 +990,26 @@ function crearTablaOperativos() {
 
                         <td>
                             ${formatearEntero(
-                                operativo.total_viviendas
+                                operativo.total_viviendas ??
+                                operativo.viviendas_visitadas ??
+                                operativo.viviendas_trabajadas ??
+                                0
                             )}
                         </td>
 
                         <td>
                             ${formatearEntero(
-                                operativo.total_actividades
+                                operativo.total_actividades ??
+                                operativo.actividades ??
+                                0
                             )}
                         </td>
 
                         <td>
                             ${formatearEntero(
-                                operativo.total_verificaciones
+                                operativo.total_verificaciones ??
+                                operativo.verificaciones ??
+                                0
                             )}
                         </td>
 
@@ -1221,22 +1228,31 @@ function renderizarDetalleOperativo() {
 
                     ${crearResumenDetalle(
                         "Viviendas",
-                        totales.viviendas
+                        totales.viviendas ??
+                        totales.viviendas_visitadas ??
+                        totales.viviendas_trabajadas ??
+                        0
                     )}
 
                     ${crearResumenDetalle(
                         "Habitantes",
-                        totales.habitantes
+                        totales.habitantes ??
+                        totales.habitantes_beneficiados ??
+                        0
                     )}
 
                     ${crearResumenDetalle(
                         "Perros",
-                        totales.perros
+                        totales.perros ??
+                        totales.perros_censados ??
+                        0
                     )}
 
                     ${crearResumenDetalle(
                         "Gatos",
-                        totales.gatos
+                        totales.gatos ??
+                        totales.gatos_censados ??
+                        0
                     )}
 
                     ${crearResumenDetalle(
@@ -1278,43 +1294,344 @@ function renderizarDetalleOperativo() {
 
 
 function crearDetalleManzana(manzana) {
-    const viviendas = obtenerArreglo(
-        manzana.viviendas
-    );
+    const viviendas =
+        obtenerArreglo(
+            manzana.viviendas
+        );
+
+    /*
+     * Compatibilidad con el esquema anterior.
+     */
+    if (viviendas.length > 0) {
+        return `
+            <details class="detail-block">
+                <summary>
+                    <div>
+                        <strong>
+                            Sector
+                            ${escaparHTML(manzana.sector)}
+                            · Manzana
+                            ${escaparHTML(manzana.manzana)}
+                        </strong>
+
+                        <span>
+                            ${viviendas.length}
+                            vivienda(s)
+                        </span>
+                    </div>
+                </summary>
+
+                <div class="detail-block__body">
+                    ${viviendas
+                        .map(crearDetalleVivienda)
+                        .join("")}
+                </div>
+            </details>
+        `;
+    }
+
+    /*
+     * Modelo nuevo:
+     * operativo_manzanas
+     *   -> resumen_manzana_jornada
+     *   -> actividades_manzana
+     */
+    const resumen =
+        manzana.resumen &&
+        typeof manzana.resumen === "object"
+            ? manzana.resumen
+            : {};
+
+    const actividades =
+        obtenerArreglo(
+            manzana.actividades
+        );
 
     return `
-        <details class="detail-block">
+        <details class="detail-block" open>
             <summary>
                 <div>
                     <strong>
                         Sector
-                        ${escaparHTML(manzana.sector)}
+                        ${escaparHTML(
+                            manzana.sector || ""
+                        )}
                         · Manzana
-                        ${escaparHTML(manzana.manzana)}
+                        ${escaparHTML(
+                            manzana.manzana || ""
+                        )}
                     </strong>
 
                     <span>
-                        ${viviendas.length}
-                        vivienda(s)
+                        ${formatearEntero(
+                            resumen.viviendas_visitadas ??
+                            0
+                        )}
+                        vivienda(s) visitada(s)
                     </span>
                 </div>
             </summary>
 
             <div class="detail-block__body">
-                ${
-                    viviendas.length === 0
-                        ? crearEstadoVacio(
-                            "No hay viviendas."
-                        )
-                        : viviendas
-                            .map(crearDetalleVivienda)
-                            .join("")
-                }
+
+                <section class="detail-summary">
+
+                    ${crearResumenDetalle(
+                        "Visitadas",
+                        resumen.viviendas_visitadas ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Trabajadas",
+                        resumen.viviendas_trabajadas ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Cerradas",
+                        resumen.viviendas_cerradas ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Deshabitadas",
+                        resumen.viviendas_deshabitadas ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Renuentes",
+                        resumen.viviendas_renuentes ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Habitantes beneficiados",
+                        resumen.habitantes_beneficiados ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Perros censados",
+                        resumen.perros_censados ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Gatos censados",
+                        resumen.gatos_censados ?? 0
+                    )}
+
+                </section>
+
+                <section>
+                    <h4>Actividades</h4>
+
+                    ${
+                        actividades.length === 0
+                            ? crearEstadoVacio(
+                                "No hay actividades registradas en esta manzana."
+                            )
+                            : actividades
+                                .map(
+                                    crearDetalleActividadNueva
+                                )
+                                .join("")
+                    }
+                </section>
+
             </div>
         </details>
     `;
 }
 
+
+function crearDetalleActividadNueva(
+    actividad
+) {
+    const insumos =
+        obtenerArreglo(
+            actividad.insumos ||
+            actividad.consumos
+        );
+
+    const rangosVacunacion =
+        insumos.flatMap(
+            insumo =>
+                obtenerArreglo(
+                    insumo.rangos_folios
+                )
+        );
+
+    return `
+        <article class="detail-item">
+
+            <div class="detail-item__header">
+                <strong>
+                    ${escaparHTML(
+                        actividad.actividad ||
+                        actividad.codigo_actividad ||
+                        "Actividad"
+                    )}
+                </strong>
+
+                <span>
+                    ${formatearFecha(
+                        actividad.fecha
+                    )}
+                </span>
+            </div>
+
+            <p>
+                Viviendas cubiertas:
+                <strong>
+                    ${formatearEntero(
+                        actividad.viviendas_cubiertas ?? 0
+                    )}
+                </strong>
+            </p>
+
+            ${
+                Number(
+                    actividad.viviendas_encuestadas || 0
+                ) > 0
+                    ? `
+                        <p>
+                            Viviendas encuestadas:
+                            <strong>
+                                ${formatearEntero(
+                                    actividad.viviendas_encuestadas
+                                )}
+                            </strong>
+                        </p>
+                    `
+                    : ""
+            }
+
+            ${
+                Number(
+                    actividad.viviendas_rociadas || 0
+                ) > 0
+                    ? `
+                        <p>
+                            Viviendas rociadas:
+                            <strong>
+                                ${formatearEntero(
+                                    actividad.viviendas_rociadas
+                                )}
+                            </strong>
+                        </p>
+                    `
+                    : ""
+            }
+
+            ${
+                Number(
+                    actividad.viviendas_ectodesparasitadas || 0
+                ) > 0
+                    ? `
+                        <p>
+                            Viviendas ectodesparasitadas:
+                            <strong>
+                                ${formatearEntero(
+                                    actividad.viviendas_ectodesparasitadas
+                                )}
+                            </strong>
+                        </p>
+                    `
+                    : ""
+            }
+
+            ${
+                Number(
+                    actividad.perros_intervenidos || 0
+                ) > 0 ||
+                Number(
+                    actividad.gatos_intervenidos || 0
+                ) > 0
+                    ? `
+                        <p>
+                            Perros:
+                            <strong>
+                                ${formatearEntero(
+                                    actividad.perros_intervenidos ?? 0
+                                )}
+                            </strong>
+                            ·
+                            Gatos:
+                            <strong>
+                                ${formatearEntero(
+                                    actividad.gatos_intervenidos ?? 0
+                                )}
+                            </strong>
+                        </p>
+                    `
+                    : ""
+            }
+
+            ${
+                rangosVacunacion.length > 0
+                    ? `
+                        <p>
+                            Folios de vacunación:
+                            <strong>
+                                ${escaparHTML(
+                                    rangosVacunacion
+                                        .map(
+                                            rango =>
+                                                `${rango.folio_desde}–${rango.folio_hasta}`
+                                        )
+                                        .join(", ")
+                                )}
+                            </strong>
+                        </p>
+                    `
+                    : ""
+            }
+
+            ${
+                insumos.length > 0
+                    ? `
+                        <ul class="detail-consumption-list">
+                            ${insumos.map(
+                                insumo => `
+                                    <li>
+                                        ${escaparHTML(
+                                            insumo.producto ||
+                                            insumo.codigo_producto ||
+                                            "Insumo"
+                                        )}
+                                        ${
+                                            insumo.lote
+                                                ? ` · ${escaparHTML(insumo.lote)}`
+                                                : ""
+                                        }
+                                        ·
+                                        ${formatearDecimal(
+                                            insumo.cantidad_capturada ??
+                                            insumo.cantidad ??
+                                            0
+                                        )}
+                                        ${escaparHTML(
+                                            insumo.unidad || ""
+                                        )}
+                                    </li>
+                                `
+                            ).join("")}
+                        </ul>
+                    `
+                    : ""
+            }
+
+            ${
+                actividad.observaciones
+                    ? `
+                        <p>
+                            ${escaparHTML(
+                                actividad.observaciones
+                            )}
+                        </p>
+                    `
+                    : ""
+            }
+
+        </article>
+    `;
+}
 
 function crearDetalleVivienda(vivienda) {
     const visitas = obtenerArreglo(

@@ -873,6 +873,24 @@ function crearValorCelda(
     valor,
     columna
 ) {
+
+    if (
+        columna === "rangos_vacunacion" &&
+        Array.isArray(valor)
+    ) {
+        if (valor.length === 0) {
+            return "—";
+        }
+
+        return escaparHTML(
+            valor
+                .map(
+                    item =>
+                        `${item.folio_desde}–${item.folio_hasta}`
+                )
+                .join(", ")
+        );
+    }
     if (
         valor === null ||
         valor === undefined ||

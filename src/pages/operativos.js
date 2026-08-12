@@ -8,6 +8,7 @@ import {
     buscarOperativosRetomar,
     obtenerOperativoJornadas,
     guardarJornadaOperativo,
+    editarJornadaOperativo,
     obtenerResultadosOperativosRetomar,
     obtenerDatosOperativoJornadas,
     obtenerTiposJornada,
@@ -52,6 +53,7 @@ const ESTADO = {
     operativoSeleccionado: null,
     tiposJornada: [],
     historialJornadas: [],
+    jornadaEditandoId: null,
     busquedaOperativo: crearBusquedaInicial(),
     operativo: crearOperativoInicial(),
     jornada: crearJornadaInicial(TIPOS_JORNADA.INICIAL)
@@ -216,6 +218,9 @@ function crearActividadInicial() {
         brigadista2: null,
         supervisor: null,
         viviendas_cubiertas: 0,
+        viviendas_encuestadas: 0,
+        viviendas_rociadas: 0,
+        viviendas_ectodesparasitadas: 0,
         perros_intervenidos: 0,
         gatos_intervenidos: 0,
         viviendas_inspeccionadas: 0,
@@ -247,7 +252,8 @@ function crearInsumoInicial() {
         unidad: null,
         presentacion: null,
         contenido_presentacion: null,
-        existencia_disponible: 0
+        existencia_disponible: 0,
+        rangos_folios: []
     };
 }
 
@@ -263,6 +269,7 @@ function reiniciarEstado() {
     ESTADO.operativoSeleccionado = null;
     ESTADO.tiposJornada = [];
     ESTADO.historialJornadas = [];
+    ESTADO.jornadaEditandoId = null;
     ESTADO.busquedaOperativo = crearBusquedaInicial();
     ESTADO.operativo = crearOperativoInicial();
     ESTADO.jornada = crearJornadaInicial();
@@ -1025,12 +1032,16 @@ function crearTarjetaManzana(manzana, indiceSector, indiceManzana) {
                     <h3>Manzana ${escaparHTML(manzana.manzana || indiceManzana + 1)}</h3>
                     <p>Resumen consolidado de la jornada.</p>
                 </div>
-                <button
-                    class="button button--danger"
-                    type="button"
-                    data-eliminar-manzana="${indiceManzana}"
-                    data-sector-index="${indiceSector}"
-                >Eliminar</button>
+                ${manzana.id ? `
+                    <span class="form-help">Manzana existente · no eliminable desde la aplicación</span>
+                ` : `
+                    <button
+                        class="button button--danger"
+                        type="button"
+                        data-eliminar-manzana="${indiceManzana}"
+                        data-sector-index="${indiceSector}"
+                    >Eliminar</button>
+                `}
             </header>
 
             <div class="accordion-card__body">
@@ -1047,7 +1058,11 @@ function crearTarjetaManzana(manzana, indiceSector, indiceManzana) {
                         >
                     </div>
 
-                    ${crearCampoResumen("viviendas_visitadas", "Viviendas visitadas", resumen, indiceSector, indiceManzana)}
+                    <div class="form-group">
+                        <label>Viviendas visitadas</label>
+                        <input type="number" min="0" step="1" value="${calcularViviendasVisitadas(resumen)}" readonly>
+                        <small>Trabajadas + cerradas + deshabitadas + renuentes.</small>
+                    </div>
                     ${crearCampoResumen("viviendas_trabajadas", "Viviendas trabajadas", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_cerradas", "Viviendas cerradas", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("viviendas_deshabitadas", "Viviendas deshabitadas", resumen, indiceSector, indiceManzana)}
@@ -1075,6 +1090,13 @@ function crearTarjetaManzana(manzana, indiceSector, indiceManzana) {
             </div>
         </section>
     `;
+}
+
+function calcularViviendasVisitadas(resumen = {}) {
+    return enteroSeguro(resumen.viviendas_trabajadas) +
+        enteroSeguro(resumen.viviendas_cerradas) +
+        enteroSeguro(resumen.viviendas_deshabitadas) +
+        enteroSeguro(resumen.viviendas_renuentes);
 }
 
 function crearCampoResumen(campo, etiqueta, resumen, indiceSector, indiceManzana) {
@@ -1263,6 +1285,7 @@ function crearCamposSegunActividad(
         contiene("MUESTRA")
     ) {
         return `
+            ${crearCampoActividadNumero("viviendas_encuestadas", "Viviendas encuestadas", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("viviendas_con_garrapata", "Viviendas con garrapata", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("perros_inspeccionados", "Perros inspeccionados", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("perros_con_garrapata", "Perros con garrapata", actividad, indiceSector, indiceManzana, indiceActividad)}
@@ -1280,6 +1303,7 @@ function crearCamposSegunActividad(
         contiene("TRATAMIENTO")
     ) {
         return `
+            ${crearCampoActividadNumero("viviendas_ectodesparasitadas", "Viviendas ectodesparasitadas", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("perros_intervenidos", "Perros desparasitados", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("gatos_intervenidos", "Gatos desparasitados", actividad, indiceSector, indiceManzana, indiceActividad)}
         `;
@@ -1289,13 +1313,23 @@ function crearCamposSegunActividad(
         return `
             ${crearCampoActividadNumero("perros_intervenidos", "Perros vacunados", actividad, indiceSector, indiceManzana, indiceActividad)}
             ${crearCampoActividadNumero("gatos_intervenidos", "Gatos vacunados", actividad, indiceSector, indiceManzana, indiceActividad)}
+
+            <div class="form-group">
+                <label>Total de folios registrados</label>
+                <input
+                    type="number"
+                    value="${obtenerTotalFoliosVacunacion(actividad)}"
+                    readonly
+                >
+            </div>
         `;
     }
 
     if (contiene("ROCI") || contiene("INSECTICIDA")) {
         return `
+            ${crearCampoActividadNumero("viviendas_rociadas", "Viviendas rociadas", actividad, indiceSector, indiceManzana, indiceActividad)}
             <p class="form-help form-group--full">
-                Las viviendas y habitantes se capturan en el resumen de la manzana. Registre aquí únicamente los datos del personal, observaciones e insumos utilizados.
+                Este valor es un desglose de las viviendas trabajadas de la manzana.
             </p>
         `;
     }
@@ -1352,7 +1386,8 @@ function actividadPermiteInsumos(tipoActividadId) {
         codigo.includes("DESPARAS") ||
         codigo.includes("TRATAMIENTO") ||
         codigo.includes("ROCI") ||
-        codigo.includes("INSECTICIDA")
+        codigo.includes("INSECTICIDA") ||
+        codigo.includes("VACUN")
     );
 }
 
@@ -1683,6 +1718,18 @@ function crearFormularioInsumos(
                                                     )}
                                                 </span>
                                             </div>
+
+                                            ${
+                                                esActividadVacunacion(actividad)
+                                                    ? crearFormularioRangosVacunacion(
+                                                        insumo,
+                                                        indiceSector,
+                                                        indiceManzana,
+                                                        indiceActividad,
+                                                        indiceInsumo
+                                                    )
+                                                    : ""
+                                            }
 
                                             <button
                                                 class="
@@ -2126,6 +2173,8 @@ function registrarEventosActividades() {
             });
         });
     });
+
+    registrarEventosRangosVacunacion();
 }
 
 function actualizarResumenConsumoEnFila(elemento, insumo) {
@@ -2158,6 +2207,463 @@ function actualizarResumenConsumoEnFila(elemento, insumo) {
         posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
     }
 }
+
+
+/*
+==========================================================
+VACUNACIÓN - RANGOS DE FOLIOS POR LOTE
+==========================================================
+*/
+
+function esActividadVacunacion(actividad) {
+    const codigo =
+        String(
+            obtenerCodigoTipoActividad(
+                actividad?.tipo_actividad_id
+            ) || ""
+        )
+            .trim()
+            .toUpperCase();
+
+    return codigo.includes("VACUN");
+}
+
+function crearRangoVacunacionInicial() {
+    return {
+        id: null,
+        folio_desde: null,
+        folio_hasta: null
+    };
+}
+
+function obtenerRangosVacunacion(insumo) {
+    if (!Array.isArray(insumo.rangos_folios)) {
+        insumo.rangos_folios = [];
+    }
+
+    return insumo.rangos_folios;
+}
+
+function obtenerCantidadFoliosRango(rango) {
+    const desde =
+        enteroSeguro(
+            rango?.folio_desde
+        );
+
+    const hasta =
+        enteroSeguro(
+            rango?.folio_hasta
+        );
+
+    if (
+        desde <= 0 ||
+        hasta < desde
+    ) {
+        return 0;
+    }
+
+    return hasta - desde + 1;
+}
+
+function obtenerTotalFoliosVacunacion(actividad) {
+    return obtenerArreglo(
+        actividad?.insumos
+    ).reduce(
+        (total, insumo) =>
+            total +
+            obtenerRangosVacunacion(
+                insumo
+            ).reduce(
+                (subtotal, rango) =>
+                    subtotal +
+                    obtenerCantidadFoliosRango(
+                        rango
+                    ),
+                0
+            ),
+        0
+    );
+}
+
+function marcarInsumoVacunacionModificado(insumo) {
+    if (
+        insumo?.id &&
+        String(
+            insumo.accion ||
+            "SIN_CAMBIO"
+        )
+            .trim()
+            .toUpperCase() ===
+            "SIN_CAMBIO"
+    ) {
+        insumo.accion =
+            "REEMPLAZAR";
+    }
+}
+
+function crearFormularioRangosVacunacion(
+    insumo,
+    indiceSector,
+    indiceManzana,
+    indiceActividad,
+    indiceInsumo
+) {
+    const rangos =
+        obtenerRangosVacunacion(
+            insumo
+        );
+
+    return `
+        <div class="form-group form-group--full">
+
+            <label>
+                Folios aplicados con este lote
+            </label>
+
+            <div class="subrecord-list">
+
+                ${
+                    rangos.length === 0
+                        ? `
+                            <p class="empty-message">
+                                No hay rangos de folios registrados.
+                            </p>
+                        `
+                        : rangos
+                            .map(
+                                (
+                                    rango,
+                                    indiceRango
+                                ) => `
+                                    <div class="subrecord-row">
+
+                                        <div class="form-group">
+                                            <label>Folio desde</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_desde ?? ""}"
+                                                data-rango-vacunacion-campo="folio_desde"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-insumo-index="${indiceInsumo}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>Folio hasta</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_hasta ?? ""}"
+                                                data-rango-vacunacion-campo="folio_hasta"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-insumo-index="${indiceInsumo}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>Cantidad</label>
+                                            <input
+                                                type="number"
+                                                value="${obtenerCantidadFoliosRango(rango)}"
+                                                readonly
+                                            >
+                                        </div>
+
+                                        <button
+                                            class="button button--danger"
+                                            type="button"
+                                            data-eliminar-rango-vacunacion="${indiceRango}"
+                                            data-sector-index="${indiceSector}"
+                                            data-manzana-index="${indiceManzana}"
+                                            data-actividad-index="${indiceActividad}"
+                                            data-insumo-index="${indiceInsumo}"
+                                        >
+                                            Eliminar rango
+                                        </button>
+
+                                    </div>
+                                `
+                            )
+                            .join("")
+                }
+
+            </div>
+
+            <button
+                class="button button--secondary"
+                type="button"
+                data-agregar-rango-vacunacion="true"
+                data-sector-index="${indiceSector}"
+                data-manzana-index="${indiceManzana}"
+                data-actividad-index="${indiceActividad}"
+                data-insumo-index="${indiceInsumo}"
+                ${!insumo.lote_id ? "disabled" : ""}
+            >
+                Agregar rango de folios
+            </button>
+
+        </div>
+    `;
+}
+
+function obtenerRangoVacunacionPorElemento(elemento) {
+    const insumo =
+        obtenerInsumoPorElemento(
+            elemento
+        );
+
+    if (!insumo) {
+        return null;
+    }
+
+    const rangos =
+        obtenerRangosVacunacion(
+            insumo
+        );
+
+    return rangos[
+        Number(
+            elemento.dataset.rangoIndex
+        )
+    ] || null;
+}
+
+function registrarEventosRangosVacunacion() {
+    document
+        .querySelectorAll(
+            "[data-agregar-rango-vacunacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                boton
+                            );
+
+                        if (!insumo) {
+                            return;
+                        }
+
+                        obtenerRangosVacunacion(
+                            insumo
+                        ).push(
+                            crearRangoVacunacionInicial()
+                        );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-eliminar-rango-vacunacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                boton
+                            );
+
+                        if (!insumo) {
+                            return;
+                        }
+
+                        obtenerRangosVacunacion(
+                            insumo
+                        ).splice(
+                            Number(
+                                boton.dataset
+                                    .eliminarRangoVacunacion
+                            ),
+                            1
+                        );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-rango-vacunacion-campo]"
+        )
+        .forEach(
+            elemento => {
+                elemento.addEventListener(
+                    "input",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                elemento
+                            );
+
+                        const rango =
+                            obtenerRangoVacunacionPorElemento(
+                                elemento
+                            );
+
+                        const campo =
+                            elemento.dataset
+                                .rangoVacunacionCampo;
+
+                        if (
+                            !insumo ||
+                            !rango ||
+                            !campo
+                        ) {
+                            return;
+                        }
+
+                        rango[campo] =
+                            elemento.value === ""
+                                ? null
+                                : enteroSeguro(
+                                    elemento.value
+                                );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+                    }
+                );
+
+                elemento.addEventListener(
+                    "change",
+                    () => {
+                        const posicionScroll =
+                            window.scrollY;
+
+                        renderizarCapturaJornadaActual();
+
+                        requestAnimationFrame(
+                            () => {
+                                window.scrollTo({
+                                    top: posicionScroll,
+                                    behavior: "auto"
+                                });
+                            }
+                        );
+                    }
+                );
+            }
+        );
+}
+
+function validarRangosVacunacion(
+    actividad,
+    manzana
+) {
+    const insumos =
+        obtenerArreglo(
+            actividad?.insumos
+        );
+
+    if (insumos.length === 0) {
+        throw new Error(
+            `La vacunación de la manzana ${manzana} debe registrar al menos un insumo.`
+        );
+    }
+
+    const folios =
+        new Set();
+
+    let total = 0;
+
+    insumos.forEach(
+        (
+            insumo,
+            indiceInsumo
+        ) => {
+            const rangos =
+                obtenerRangosVacunacion(
+                    insumo
+                );
+
+            if (rangos.length === 0) {
+                throw new Error(
+                    `Registre al menos un rango de folios para el insumo ${indiceInsumo + 1} de vacunación.`
+                );
+            }
+
+            rangos.forEach(
+                (
+                    rango,
+                    indiceRango
+                ) => {
+                    const desde =
+                        enteroSeguro(
+                            rango.folio_desde
+                        );
+
+                    const hasta =
+                        enteroSeguro(
+                            rango.folio_hasta
+                        );
+
+                    if (
+                        desde <= 0 ||
+                        hasta <= 0
+                    ) {
+                        throw new Error(
+                            `Complete el rango ${indiceRango + 1} del insumo ${indiceInsumo + 1} de vacunación.`
+                        );
+                    }
+
+                    if (hasta < desde) {
+                        throw new Error(
+                            `El folio final ${hasta} no puede ser menor que el folio inicial ${desde}.`
+                        );
+                    }
+
+                    for (
+                        let folio = desde;
+                        folio <= hasta;
+                        folio += 1
+                    ) {
+                        if (folios.has(folio)) {
+                            throw new Error(
+                                `El folio ${folio} está registrado más de una vez en la actividad de vacunación.`
+                            );
+                        }
+
+                        folios.add(folio);
+                        total += 1;
+                    }
+                }
+            );
+        }
+    );
+
+    return total;
+}
+
 
 function irPasoAnterior() {
     guardarCamposInformacionGeneral();
@@ -2258,9 +2764,8 @@ function validarResumenManzana(resumen, sector, manzana) {
         enteroSeguro(resumen.viviendas_deshabitadas) +
         enteroSeguro(resumen.viviendas_renuentes);
 
-    if (resultados > enteroSeguro(resumen.viviendas_visitadas)) {
-        throw new Error(`En el sector ${sector}, manzana ${manzana}, los resultados de vivienda superan las viviendas visitadas.`);
-    }
+    // Viviendas visitadas se deriva siempre del resultado de la visita.
+    resumen.viviendas_visitadas = resultados;
 
     const distribucionAnimales =
         enteroSeguro(resumen.viviendas_con_perros) +
@@ -2391,6 +2896,13 @@ function validarActividades() {
                         );
                     }
                 });
+
+                if (esActividadVacunacion(actividad)) {
+                    validarRangosVacunacion(
+                        actividad,
+                        manzana.manzana
+                    );
+                }
             });
         });
     });
@@ -2736,6 +3248,9 @@ function renderizarDetalleOperativoRetomar() {
     document.getElementById("btn-cambiar-modo-operativo")?.addEventListener("click", renderizarBusquedaOperativo);
     document.getElementById("btn-operation-home")?.addEventListener("click", () => navegar("/inicio"));
     document.getElementById("btn-new-operation-journey")?.addEventListener("click", renderizarFormularioNuevaJornada);
+    document.querySelectorAll("[data-editar-jornada]").forEach(boton => {
+        boton.addEventListener("click", () => iniciarEdicionJornada(boton.dataset.editarJornada));
+    });
 }
 
 function crearHistorialJornadas() {
@@ -2758,11 +3273,103 @@ function crearHistorialJornadas() {
                             <time>${formatearFecha(jornada.fecha)}</time>
                         </header>
                         <p>${escaparHTML(jornada.motivo || jornada.observaciones || "Sin observaciones")}</p>
+                        ${jornada.cancelada ? "" : `
+                            <button class="button button--secondary" type="button" data-editar-jornada="${escaparHTML(jornada.id)}">Editar jornada</button>
+                        `}
                     </div>
                 </article>
             `).join("")}
         </div>
     `;
+}
+
+function iniciarEdicionJornada(jornadaId) {
+    const jornada = ESTADO.historialJornadas.find(item => String(item.id) === String(jornadaId));
+    if (!jornada) {
+        renderizarErrorOperativo(new Error("No se encontró la jornada seleccionada."));
+        return;
+    }
+    if (jornada.cancelada) {
+        renderizarErrorOperativo(new Error("No se puede editar una jornada cancelada."));
+        return;
+    }
+
+    ESTADO.jornadaEditandoId = jornada.id;
+    ESTADO.jornada = normalizarJornadaParaEdicion(jornada);
+    renderizarEditorJornadaRetomada();
+}
+
+function normalizarJornadaParaEdicion(jornada = {}) {
+    const manzanasCrudas = obtenerArreglo(jornada.manzanas_detalle || jornada.manzanas || jornada.detalle_manzanas);
+    const sectoresMapa = new Map();
+
+    manzanasCrudas.forEach(item => {
+        const sectorCodigo = normalizarTexto(item.sector) || "SIN_SECTOR";
+        if (!sectoresMapa.has(sectorCodigo)) {
+            sectoresMapa.set(sectorCodigo, { sector: sectorCodigo, manzanas: [] });
+        }
+        sectoresMapa.get(sectorCodigo).manzanas.push({
+            id: item.id || item.operativo_manzana_id || null,
+            manzana: item.manzana || "",
+            fecha_inicio: item.fecha_inicio || jornada.fecha || fechaActualISO(),
+            fecha_fin: item.fecha_fin || jornada.fecha || fechaActualISO(),
+            estatus: item.estatus || "TRABAJADA",
+            observaciones: item.observaciones || null,
+            resumen: {
+                ...crearResumenManzanaInicial(),
+                ...(item.resumen || item.resumen_manzana || {})
+            },
+            actividades: obtenerArreglo(item.actividades).map(a => ({
+                ...crearActividadInicial(),
+                ...a,
+                id: a.id || a.actividad_manzana_id || null,
+                insumos: obtenerArreglo(a.insumos || a.consumos).map(i => ({
+                    ...crearInsumoInicial(),
+                    ...i,
+                    id: i.id || i.consumo_id || null,
+                    accion: "SIN_CAMBIO",
+                    rangos_folios: obtenerArreglo(
+                        i.rangos_folios ||
+                        i.rangos_vacunacion
+                    ).map(rango => ({
+                        id: rango.id || null,
+                        folio_desde: rango.folio_desde ?? null,
+                        folio_hasta: rango.folio_hasta ?? null
+                    }))
+                }))
+            }))
+        });
+    });
+
+    return {
+        tipo_jornada: jornada.tipo_jornada || TIPOS_JORNADA.CONTINUACION,
+        fecha: jornada.fecha || fechaActualISO(),
+        hora_inicio: jornada.hora_inicio || null,
+        hora_fin: jornada.hora_fin || null,
+        motivo: jornada.motivo || null,
+        observaciones: jornada.observaciones || null,
+        sectores: Array.from(sectoresMapa.values())
+    };
+}
+
+function construirPayloadEdicionJornadaActual() {
+    return {
+        fecha: ESTADO.jornada.fecha,
+        hora_inicio: ESTADO.jornada.hora_inicio || null,
+        hora_fin: ESTADO.jornada.hora_fin || null,
+        motivo: ESTADO.jornada.motivo || null,
+        observaciones: ESTADO.jornada.observaciones || null,
+        manzanas: ESTADO.jornada.sectores.flatMap(sector =>
+            sector.manzanas.map(manzana => ({
+                ...manzana,
+                sector: sector.sector,
+                resumen: {
+                    ...manzana.resumen,
+                    viviendas_visitadas: calcularViviendasVisitadas(manzana.resumen)
+                }
+            }))
+        )
+    };
 }
 
 function renderizarFormularioNuevaJornada() {
@@ -2835,7 +3442,7 @@ function renderizarEditorJornadaRetomada() {
     app.innerHTML = `
         <div class="operative-page">
             ${crearEncabezadoPagina(
-                `Nueva jornada · ${operativo.folio_operativo || "Operativo"}`,
+                `${ESTADO.jornadaEditandoId ? "Editar jornada" : "Nueva jornada"} · ${operativo.folio_operativo || "Operativo"}`,
                 ESTADO.jornada.tipo_jornada,
                 true
             )}
@@ -2851,7 +3458,13 @@ function renderizarEditorJornadaRetomada() {
 
                 <footer class="wizard-footer">
                     <div id="operative-global-message" class="form-message" role="alert"></div>
-                    <button id="btn-guardar-jornada-retomada" class="button button--primary" type="button">Guardar jornada</button>
+                    ${ESTADO.jornadaEditandoId ? `
+                        <div class="form-group" style="min-width:280px">
+                            <label for="motivo-edicion-jornada">Motivo de la edición</label>
+                            <input id="motivo-edicion-jornada" type="text" maxlength="500" placeholder="Ej. Corrección de captura" required>
+                        </div>
+                    ` : ""}
+                    <button id="btn-guardar-jornada-retomada" class="button button--primary" type="button">${ESTADO.jornadaEditandoId ? "Guardar cambios" : "Guardar jornada"}</button>
                 </footer>
             </main>
         </div>
@@ -2874,11 +3487,23 @@ async function guardarJornadaRetomada() {
         validarActividades();
         ESTADO.guardando = true;
 
-        await guardarJornadaOperativo(obtenerToken(), {
-            operativo_id: ESTADO.operativoSeleccionado.id,
-            ...construirPayloadJornadaActual()
-        });
+        if (ESTADO.jornadaEditandoId) {
+            const motivoEdicion = normalizarTexto(document.getElementById("motivo-edicion-jornada")?.value);
+            if (!motivoEdicion) {
+                throw new Error("Indique el motivo de la edición.");
+            }
+            await editarJornadaOperativo(obtenerToken(), ESTADO.jornadaEditandoId, {
+                ...construirPayloadEdicionJornadaActual(),
+                motivo_edicion: motivoEdicion
+            });
+        } else {
+            await guardarJornadaOperativo(obtenerToken(), {
+                operativo_id: ESTADO.operativoSeleccionado.id,
+                ...construirPayloadJornadaActual()
+            });
+        }
 
+        ESTADO.jornadaEditandoId = null;
         await seleccionarOperativoRetomar(ESTADO.operativoSeleccionado.id);
     } catch (error) {
         ESTADO.guardando = false;

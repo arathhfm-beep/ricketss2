@@ -402,7 +402,15 @@ export async function consultarOperativos(
                 respuesta.operativos
             )
                 ? respuesta.operativos
-                : []
+                : Array.isArray(
+                    respuesta.resultados
+                )
+                    ? respuesta.resultados
+                    : Array.isArray(
+                        respuesta.datos
+                    )
+                        ? respuesta.datos
+                        : []
     };
 }
 
@@ -488,7 +496,11 @@ export async function consultarDetalleOperativo(
         manzanas:
             Array.isArray(respuesta.manzanas)
                 ? respuesta.manzanas
-                : []
+                : Array.isArray(
+                    respuesta.manzanas_detalle
+                )
+                    ? respuesta.manzanas_detalle
+                    : []
     };
 }
 
