@@ -1,14 +1,17 @@
 import { CONFIG } from "../../config.js";
 
 import {
-    obtenerCatalogosOperativo,
+   obtenerCatalogosOperativo,
     buscarCasosOperativo,
     obtenerInventarioOperativo,
     registrarOperativo,
     buscarOperativosRetomar,
     obtenerOperativoJornadas,
     guardarJornadaOperativo,
+
+    obtenerDetalleOperativoEditable,
     editarJornadaOperativo,
+
     obtenerResultadosOperativosRetomar,
     obtenerDatosOperativoJornadas,
     obtenerTiposJornada,
@@ -51,6 +54,8 @@ const ESTADO = {
     inventario: [],
     casoSeleccionado: null,
     operativoSeleccionado: null,
+    editandoJornada: false,
+    jornadaEditandoId: null,
     tiposJornada: [],
     historialJornadas: [],
     jornadaEditandoId: null,
@@ -235,6 +240,7 @@ function crearActividadInicial() {
         larvas_encontradas: 0,
         ninfas_encontradas: 0,
         adultos_encontrados: 0,
+        rangos_vacunacion: [],
         observaciones: null,
         insumos: []
     };
@@ -252,8 +258,7 @@ function crearInsumoInicial() {
         unidad: null,
         presentacion: null,
         contenido_presentacion: null,
-        existencia_disponible: 0,
-        rangos_folios: []
+        existencia_disponible: 0
     };
 }
 
@@ -273,6 +278,8 @@ function reiniciarEstado() {
     ESTADO.busquedaOperativo = crearBusquedaInicial();
     ESTADO.operativo = crearOperativoInicial();
     ESTADO.jornada = crearJornadaInicial();
+    ESTADO.editandoJornada = false;
+    ESTADO.jornadaEditandoId = null;
 }
 
 async function cargarCatalogosOperativo() {
@@ -1266,7 +1273,12 @@ function crearCamposSegunActividad(
     indiceManzana,
     indiceActividad
 ) {
-    const codigo = String(codigoActividad || "").toUpperCase();
+    const codigo =
+        String(
+            codigoActividad || ""
+        )
+        .trim()
+        .toUpperCase();
 
     if (!codigo) {
         return `
@@ -1276,7 +1288,16 @@ function crearCamposSegunActividad(
         `;
     }
 
-    const contiene = texto => codigo.includes(texto);
+    const contiene =
+        texto =>
+            codigo.includes(texto);
+
+
+    /*
+    ==========================================================
+    ENCUESTA / ENTOMOLOGÍA
+    ==========================================================
+    */
 
     if (
         contiene("ENCUESTA") ||
@@ -1285,17 +1306,132 @@ function crearCamposSegunActividad(
         contiene("MUESTRA")
     ) {
         return `
-            ${crearCampoActividadNumero("viviendas_encuestadas", "Viviendas encuestadas", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("viviendas_con_garrapata", "Viviendas con garrapata", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("perros_inspeccionados", "Perros inspeccionados", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("perros_con_garrapata", "Perros con garrapata", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("gatos_inspeccionados", "Gatos inspeccionados", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("gatos_con_garrapata", "Gatos con garrapata", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("garrapatas_en_viviendas", "Total de garrapatas en viviendas", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("garrapatas_en_perros", "Total de garrapatas en perros", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("garrapatas_en_gatos", "Total de garrapatas en gatos", actividad, indiceSector, indiceManzana, indiceActividad)}
+
+            ${crearCampoActividadNumero(
+                "viviendas_encuestadas",
+                "Viviendas encuestadas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "viviendas_inspeccionadas",
+                "Viviendas inspeccionadas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "viviendas_con_garrapata",
+                "Viviendas con garrapata",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "perros_inspeccionados",
+                "Perros inspeccionados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "perros_con_garrapata",
+                "Perros con garrapata",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "gatos_inspeccionados",
+                "Gatos inspeccionados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "gatos_con_garrapata",
+                "Gatos con garrapata",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "garrapatas_en_viviendas",
+                "Total de garrapatas en viviendas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "garrapatas_en_perros",
+                "Total de garrapatas en perros",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "garrapatas_en_gatos",
+                "Total de garrapatas en gatos",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "larvas_encontradas",
+                "Larvas encontradas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "ninfas_encontradas",
+                "Ninfas encontradas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "adultos_encontrados",
+                "Adultos encontrados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
         `;
     }
+
+
+    /*
+    ==========================================================
+    ECTODESPARASITACIÓN
+    ==========================================================
+    */
 
     if (
         contiene("DESPARAS") ||
@@ -1303,40 +1439,127 @@ function crearCamposSegunActividad(
         contiene("TRATAMIENTO")
     ) {
         return `
-            ${crearCampoActividadNumero("viviendas_ectodesparasitadas", "Viviendas ectodesparasitadas", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("perros_intervenidos", "Perros desparasitados", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("gatos_intervenidos", "Gatos desparasitados", actividad, indiceSector, indiceManzana, indiceActividad)}
+
+            ${crearCampoActividadNumero(
+                "viviendas_ectodesparasitadas",
+                "Viviendas ectodesparasitadas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "perros_intervenidos",
+                "Perros desparasitados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "gatos_intervenidos",
+                "Gatos desparasitados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
         `;
     }
 
-    if (contiene("VACUN")) {
+
+    /*
+    ==========================================================
+    ROCIADO
+    ==========================================================
+    */
+
+    if (
+        contiene("ROCI") ||
+        contiene("INSECTICIDA")
+    ) {
         return `
-            ${crearCampoActividadNumero("perros_intervenidos", "Perros vacunados", actividad, indiceSector, indiceManzana, indiceActividad)}
-            ${crearCampoActividadNumero("gatos_intervenidos", "Gatos vacunados", actividad, indiceSector, indiceManzana, indiceActividad)}
 
-            <div class="form-group">
-                <label>Total de folios registrados</label>
-                <input
-                    type="number"
-                    value="${obtenerTotalFoliosVacunacion(actividad)}"
-                    readonly
-                >
-            </div>
+            ${crearCampoActividadNumero(
+                "viviendas_rociadas",
+                "Viviendas rociadas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
         `;
     }
 
-    if (contiene("ROCI") || contiene("INSECTICIDA")) {
+
+    /*
+    ==========================================================
+    VACUNACIÓN
+    ==========================================================
+    */
+
+    if (
+        contiene("VACUN")
+    ) {
         return `
-            ${crearCampoActividadNumero("viviendas_rociadas", "Viviendas rociadas", actividad, indiceSector, indiceManzana, indiceActividad)}
-            <p class="form-help form-group--full">
-                Este valor es un desglose de las viviendas trabajadas de la manzana.
-            </p>
+
+            ${crearCampoActividadNumero(
+                "perros_intervenidos",
+                "Perros vacunados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "gatos_intervenidos",
+                "Gatos vacunados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
         `;
     }
+
+
+    /*
+    ==========================================================
+    OTROS
+    ==========================================================
+    */
 
     return `
-        ${crearCampoActividadNumero("perros_intervenidos", "Perros intervenidos", actividad, indiceSector, indiceManzana, indiceActividad)}
-        ${crearCampoActividadNumero("gatos_intervenidos", "Gatos intervenidos", actividad, indiceSector, indiceManzana, indiceActividad)}
+
+        ${crearCampoActividadNumero(
+            "viviendas_cubiertas",
+            "Viviendas cubiertas",
+            actividad,
+            indiceSector,
+            indiceManzana,
+            indiceActividad
+        )}
+
+        ${crearCampoActividadNumero(
+            "perros_intervenidos",
+            "Perros intervenidos",
+            actividad,
+            indiceSector,
+            indiceManzana,
+            indiceActividad
+        )}
+
+        ${crearCampoActividadNumero(
+            "gatos_intervenidos",
+            "Gatos intervenidos",
+            actividad,
+            indiceSector,
+            indiceManzana,
+            indiceActividad
+        )}
     `;
 }
 
@@ -1386,8 +1609,7 @@ function actividadPermiteInsumos(tipoActividadId) {
         codigo.includes("DESPARAS") ||
         codigo.includes("TRATAMIENTO") ||
         codigo.includes("ROCI") ||
-        codigo.includes("INSECTICIDA") ||
-        codigo.includes("VACUN")
+        codigo.includes("INSECTICIDA")
     );
 }
 
@@ -1718,18 +1940,6 @@ function crearFormularioInsumos(
                                                     )}
                                                 </span>
                                             </div>
-
-                                            ${
-                                                esActividadVacunacion(actividad)
-                                                    ? crearFormularioRangosVacunacion(
-                                                        insumo,
-                                                        indiceSector,
-                                                        indiceManzana,
-                                                        indiceActividad,
-                                                        indiceInsumo
-                                                    )
-                                                    : ""
-                                            }
 
                                             <button
                                                 class="
@@ -2173,8 +2383,6 @@ function registrarEventosActividades() {
             });
         });
     });
-
-    registrarEventosRangosVacunacion();
 }
 
 function actualizarResumenConsumoEnFila(elemento, insumo) {
@@ -2207,463 +2415,6 @@ function actualizarResumenConsumoEnFila(elemento, insumo) {
         posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
     }
 }
-
-
-/*
-==========================================================
-VACUNACIÓN - RANGOS DE FOLIOS POR LOTE
-==========================================================
-*/
-
-function esActividadVacunacion(actividad) {
-    const codigo =
-        String(
-            obtenerCodigoTipoActividad(
-                actividad?.tipo_actividad_id
-            ) || ""
-        )
-            .trim()
-            .toUpperCase();
-
-    return codigo.includes("VACUN");
-}
-
-function crearRangoVacunacionInicial() {
-    return {
-        id: null,
-        folio_desde: null,
-        folio_hasta: null
-    };
-}
-
-function obtenerRangosVacunacion(insumo) {
-    if (!Array.isArray(insumo.rangos_folios)) {
-        insumo.rangos_folios = [];
-    }
-
-    return insumo.rangos_folios;
-}
-
-function obtenerCantidadFoliosRango(rango) {
-    const desde =
-        enteroSeguro(
-            rango?.folio_desde
-        );
-
-    const hasta =
-        enteroSeguro(
-            rango?.folio_hasta
-        );
-
-    if (
-        desde <= 0 ||
-        hasta < desde
-    ) {
-        return 0;
-    }
-
-    return hasta - desde + 1;
-}
-
-function obtenerTotalFoliosVacunacion(actividad) {
-    return obtenerArreglo(
-        actividad?.insumos
-    ).reduce(
-        (total, insumo) =>
-            total +
-            obtenerRangosVacunacion(
-                insumo
-            ).reduce(
-                (subtotal, rango) =>
-                    subtotal +
-                    obtenerCantidadFoliosRango(
-                        rango
-                    ),
-                0
-            ),
-        0
-    );
-}
-
-function marcarInsumoVacunacionModificado(insumo) {
-    if (
-        insumo?.id &&
-        String(
-            insumo.accion ||
-            "SIN_CAMBIO"
-        )
-            .trim()
-            .toUpperCase() ===
-            "SIN_CAMBIO"
-    ) {
-        insumo.accion =
-            "REEMPLAZAR";
-    }
-}
-
-function crearFormularioRangosVacunacion(
-    insumo,
-    indiceSector,
-    indiceManzana,
-    indiceActividad,
-    indiceInsumo
-) {
-    const rangos =
-        obtenerRangosVacunacion(
-            insumo
-        );
-
-    return `
-        <div class="form-group form-group--full">
-
-            <label>
-                Folios aplicados con este lote
-            </label>
-
-            <div class="subrecord-list">
-
-                ${
-                    rangos.length === 0
-                        ? `
-                            <p class="empty-message">
-                                No hay rangos de folios registrados.
-                            </p>
-                        `
-                        : rangos
-                            .map(
-                                (
-                                    rango,
-                                    indiceRango
-                                ) => `
-                                    <div class="subrecord-row">
-
-                                        <div class="form-group">
-                                            <label>Folio desde</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                value="${rango.folio_desde ?? ""}"
-                                                data-rango-vacunacion-campo="folio_desde"
-                                                data-sector-index="${indiceSector}"
-                                                data-manzana-index="${indiceManzana}"
-                                                data-actividad-index="${indiceActividad}"
-                                                data-insumo-index="${indiceInsumo}"
-                                                data-rango-index="${indiceRango}"
-                                            >
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label>Folio hasta</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                step="1"
-                                                value="${rango.folio_hasta ?? ""}"
-                                                data-rango-vacunacion-campo="folio_hasta"
-                                                data-sector-index="${indiceSector}"
-                                                data-manzana-index="${indiceManzana}"
-                                                data-actividad-index="${indiceActividad}"
-                                                data-insumo-index="${indiceInsumo}"
-                                                data-rango-index="${indiceRango}"
-                                            >
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label>Cantidad</label>
-                                            <input
-                                                type="number"
-                                                value="${obtenerCantidadFoliosRango(rango)}"
-                                                readonly
-                                            >
-                                        </div>
-
-                                        <button
-                                            class="button button--danger"
-                                            type="button"
-                                            data-eliminar-rango-vacunacion="${indiceRango}"
-                                            data-sector-index="${indiceSector}"
-                                            data-manzana-index="${indiceManzana}"
-                                            data-actividad-index="${indiceActividad}"
-                                            data-insumo-index="${indiceInsumo}"
-                                        >
-                                            Eliminar rango
-                                        </button>
-
-                                    </div>
-                                `
-                            )
-                            .join("")
-                }
-
-            </div>
-
-            <button
-                class="button button--secondary"
-                type="button"
-                data-agregar-rango-vacunacion="true"
-                data-sector-index="${indiceSector}"
-                data-manzana-index="${indiceManzana}"
-                data-actividad-index="${indiceActividad}"
-                data-insumo-index="${indiceInsumo}"
-                ${!insumo.lote_id ? "disabled" : ""}
-            >
-                Agregar rango de folios
-            </button>
-
-        </div>
-    `;
-}
-
-function obtenerRangoVacunacionPorElemento(elemento) {
-    const insumo =
-        obtenerInsumoPorElemento(
-            elemento
-        );
-
-    if (!insumo) {
-        return null;
-    }
-
-    const rangos =
-        obtenerRangosVacunacion(
-            insumo
-        );
-
-    return rangos[
-        Number(
-            elemento.dataset.rangoIndex
-        )
-    ] || null;
-}
-
-function registrarEventosRangosVacunacion() {
-    document
-        .querySelectorAll(
-            "[data-agregar-rango-vacunacion]"
-        )
-        .forEach(
-            boton => {
-                boton.addEventListener(
-                    "click",
-                    () => {
-                        const insumo =
-                            obtenerInsumoPorElemento(
-                                boton
-                            );
-
-                        if (!insumo) {
-                            return;
-                        }
-
-                        obtenerRangosVacunacion(
-                            insumo
-                        ).push(
-                            crearRangoVacunacionInicial()
-                        );
-
-                        marcarInsumoVacunacionModificado(
-                            insumo
-                        );
-
-                        renderizarCapturaJornadaActual();
-                    }
-                );
-            }
-        );
-
-    document
-        .querySelectorAll(
-            "[data-eliminar-rango-vacunacion]"
-        )
-        .forEach(
-            boton => {
-                boton.addEventListener(
-                    "click",
-                    () => {
-                        const insumo =
-                            obtenerInsumoPorElemento(
-                                boton
-                            );
-
-                        if (!insumo) {
-                            return;
-                        }
-
-                        obtenerRangosVacunacion(
-                            insumo
-                        ).splice(
-                            Number(
-                                boton.dataset
-                                    .eliminarRangoVacunacion
-                            ),
-                            1
-                        );
-
-                        marcarInsumoVacunacionModificado(
-                            insumo
-                        );
-
-                        renderizarCapturaJornadaActual();
-                    }
-                );
-            }
-        );
-
-    document
-        .querySelectorAll(
-            "[data-rango-vacunacion-campo]"
-        )
-        .forEach(
-            elemento => {
-                elemento.addEventListener(
-                    "input",
-                    () => {
-                        const insumo =
-                            obtenerInsumoPorElemento(
-                                elemento
-                            );
-
-                        const rango =
-                            obtenerRangoVacunacionPorElemento(
-                                elemento
-                            );
-
-                        const campo =
-                            elemento.dataset
-                                .rangoVacunacionCampo;
-
-                        if (
-                            !insumo ||
-                            !rango ||
-                            !campo
-                        ) {
-                            return;
-                        }
-
-                        rango[campo] =
-                            elemento.value === ""
-                                ? null
-                                : enteroSeguro(
-                                    elemento.value
-                                );
-
-                        marcarInsumoVacunacionModificado(
-                            insumo
-                        );
-                    }
-                );
-
-                elemento.addEventListener(
-                    "change",
-                    () => {
-                        const posicionScroll =
-                            window.scrollY;
-
-                        renderizarCapturaJornadaActual();
-
-                        requestAnimationFrame(
-                            () => {
-                                window.scrollTo({
-                                    top: posicionScroll,
-                                    behavior: "auto"
-                                });
-                            }
-                        );
-                    }
-                );
-            }
-        );
-}
-
-function validarRangosVacunacion(
-    actividad,
-    manzana
-) {
-    const insumos =
-        obtenerArreglo(
-            actividad?.insumos
-        );
-
-    if (insumos.length === 0) {
-        throw new Error(
-            `La vacunación de la manzana ${manzana} debe registrar al menos un insumo.`
-        );
-    }
-
-    const folios =
-        new Set();
-
-    let total = 0;
-
-    insumos.forEach(
-        (
-            insumo,
-            indiceInsumo
-        ) => {
-            const rangos =
-                obtenerRangosVacunacion(
-                    insumo
-                );
-
-            if (rangos.length === 0) {
-                throw new Error(
-                    `Registre al menos un rango de folios para el insumo ${indiceInsumo + 1} de vacunación.`
-                );
-            }
-
-            rangos.forEach(
-                (
-                    rango,
-                    indiceRango
-                ) => {
-                    const desde =
-                        enteroSeguro(
-                            rango.folio_desde
-                        );
-
-                    const hasta =
-                        enteroSeguro(
-                            rango.folio_hasta
-                        );
-
-                    if (
-                        desde <= 0 ||
-                        hasta <= 0
-                    ) {
-                        throw new Error(
-                            `Complete el rango ${indiceRango + 1} del insumo ${indiceInsumo + 1} de vacunación.`
-                        );
-                    }
-
-                    if (hasta < desde) {
-                        throw new Error(
-                            `El folio final ${hasta} no puede ser menor que el folio inicial ${desde}.`
-                        );
-                    }
-
-                    for (
-                        let folio = desde;
-                        folio <= hasta;
-                        folio += 1
-                    ) {
-                        if (folios.has(folio)) {
-                            throw new Error(
-                                `El folio ${folio} está registrado más de una vez en la actividad de vacunación.`
-                            );
-                        }
-
-                        folios.add(folio);
-                        total += 1;
-                    }
-                }
-            );
-        }
-    );
-
-    return total;
-}
-
 
 function irPasoAnterior() {
     guardarCamposInformacionGeneral();
@@ -2896,13 +2647,6 @@ function validarActividades() {
                         );
                     }
                 });
-
-                if (esActividadVacunacion(actividad)) {
-                    validarRangosVacunacion(
-                        actividad,
-                        manzana.manzana
-                    );
-                }
             });
         });
     });
@@ -3248,6 +2992,20 @@ function renderizarDetalleOperativoRetomar() {
     document.getElementById("btn-cambiar-modo-operativo")?.addEventListener("click", renderizarBusquedaOperativo);
     document.getElementById("btn-operation-home")?.addEventListener("click", () => navegar("/inicio"));
     document.getElementById("btn-new-operation-journey")?.addEventListener("click", renderizarFormularioNuevaJornada);
+    document
+    .querySelectorAll(
+        "[data-editar-jornada]"
+    )
+    .forEach(boton => {
+
+        boton.addEventListener(
+            "click",
+            () => editarJornadaExistente(
+                boton.dataset.editarJornada
+            )
+        );
+
+    });
     document.querySelectorAll("[data-editar-jornada]").forEach(boton => {
         boton.addEventListener("click", () => iniciarEdicionJornada(boton.dataset.editarJornada));
     });
@@ -3255,30 +3013,85 @@ function renderizarDetalleOperativoRetomar() {
 
 function crearHistorialJornadas() {
     if (ESTADO.historialJornadas.length === 0) {
-        return `<div class="operation-history-empty"><p>No hay jornadas registradas.</p></div>`;
+        return `
+            <div class="operation-history-empty">
+                <p>No hay jornadas registradas.</p>
+            </div>
+        `;
     }
 
     return `
         <div class="operation-timeline">
+
             ${ESTADO.historialJornadas.map(jornada => `
+
                 <article class="operation-timeline-item">
+
                     <div class="operation-timeline-item__content">
+
                         <header>
+
                             <div>
-                                <span class="journey-type ${obtenerClaseTipoJornada(jornada.tipo_jornada)}">
-                                    ${escaparHTML(jornada.tipo_jornada_nombre || jornada.tipo_jornada)}
+
+                                <span
+                                    class="journey-type ${obtenerClaseTipoJornada(
+                                        jornada.tipo_jornada
+                                    )}"
+                                >
+                                    ${escaparHTML(
+                                        jornada.tipo_jornada_nombre ||
+                                        jornada.tipo_jornada
+                                    )}
                                 </span>
-                                <h3>Jornada ${enteroSeguro(jornada.numero_jornada)}</h3>
+
+                                <h3>
+                                    Jornada ${enteroSeguro(
+                                        jornada.numero_jornada
+                                    )}
+                                </h3>
+
                             </div>
-                            <time>${formatearFecha(jornada.fecha)}</time>
+
+                            <time>
+                                ${formatearFecha(
+                                    jornada.fecha
+                                )}
+                            </time>
+
                         </header>
-                        <p>${escaparHTML(jornada.motivo || jornada.observaciones || "Sin observaciones")}</p>
-                        ${jornada.cancelada ? "" : `
-                            <button class="button button--secondary" type="button" data-editar-jornada="${escaparHTML(jornada.id)}">Editar jornada</button>
-                        `}
+
+                        <p>
+                            ${escaparHTML(
+                                jornada.motivo ||
+                                jornada.observaciones ||
+                                "Sin observaciones"
+                            )}
+                        </p>
+
+                        ${!jornada.cancelada ? `
+
+                            <div class="operation-timeline-item__actions">
+
+                                <button
+                                    class="button button--secondary"
+                                    type="button"
+                                    data-editar-jornada="${escaparHTML(
+                                        jornada.id
+                                    )}"
+                                >
+                                    Editar jornada
+                                </button>
+
+                            </div>
+
+                        ` : ""}
+
                     </div>
+
                 </article>
+
             `).join("")}
+
         </div>
     `;
 }
@@ -3297,6 +3110,455 @@ function iniciarEdicionJornada(jornadaId) {
     ESTADO.jornadaEditandoId = jornada.id;
     ESTADO.jornada = normalizarJornadaParaEdicion(jornada);
     renderizarEditorJornadaRetomada();
+}
+
+function construirJornadaDesdeDetalle(
+    detalle,
+    jornadaId
+) {
+    const manzanasDetalle =
+        obtenerArreglo(
+            detalle?.manzanas
+        )
+        .filter(
+            manzana =>
+                String(
+                    manzana.jornada_id || ""
+                ) ===
+                String(
+                    jornadaId || ""
+                )
+        );
+
+
+    if (manzanasDetalle.length === 0) {
+        throw new Error(
+            "La jornada seleccionada no tiene manzanas registradas."
+        );
+    }
+
+
+    const jornadaBD =
+        manzanasDetalle[0]?.jornada || {};
+
+
+    /*
+    ======================================================
+    AGRUPAR MANZANAS POR SECTOR
+    ======================================================
+    */
+
+    const sectoresMap =
+        new Map();
+
+
+    manzanasDetalle.forEach(
+        manzanaBD => {
+
+            const codigoSector =
+                String(
+                    manzanaBD.sector || ""
+                ).trim();
+
+
+            if (
+                !sectoresMap.has(
+                    codigoSector
+                )
+            ) {
+
+                sectoresMap.set(
+                    codigoSector,
+                    {
+                        sector:
+                            codigoSector,
+
+                        manzanas: []
+                    }
+                );
+
+            }
+
+
+            const resumenBD =
+                manzanaBD.resumen || {};
+
+
+            const actividades =
+                obtenerArreglo(
+                    manzanaBD.actividades
+                )
+                .map(
+                    actividadBD => {
+
+                        const consumos =
+                            obtenerArreglo(
+                                actividadBD.consumos
+                            )
+                            .map(
+                                consumoBD => ({
+                                    id:
+                                        consumoBD.id,
+
+                                    lote_id:
+                                        consumoBD.lote_id,
+
+                                    tipo_captura:
+                                        consumoBD.tipo_captura ||
+                                        "UNIDAD_BASE",
+
+                                    cantidad_capturada:
+                                        decimalSeguro(
+                                            consumoBD.cantidad_capturada ??
+                                            consumoBD.cantidad
+                                        ),
+
+                                    cantidad:
+                                        decimalSeguro(
+                                            consumoBD.cantidad_base ??
+                                            consumoBD.cantidad
+                                        ),
+
+                                    unidad:
+                                        consumoBD.unidad || null,
+
+                                    presentacion:
+                                        consumoBD.presentacion || null,
+
+                                    contenido_presentacion:
+                                        decimalSeguro(
+                                            consumoBD.contenido_presentacion
+                                        ),
+
+                                    existencia_disponible:
+                                        0,
+
+                                    /*
+                                     * Muy importante:
+                                     * consumo existente = no tocar stock.
+                                     */
+                                    accion:
+                                        "SIN_CAMBIO"
+                                })
+                            );
+
+
+                        return {
+                            id:
+                                actividadBD.id,
+
+                            tipo_actividad_id:
+                                actividadBD.tipo_actividad_id,
+
+                            fecha:
+                                actividadBD.fecha ||
+                                jornadaBD.fecha ||
+                                fechaActualISO(),
+
+                            brigadista1:
+                                actividadBD.brigadista1 || null,
+
+                            brigadista2:
+                                actividadBD.brigadista2 || null,
+
+                            supervisor:
+                                actividadBD.supervisor || null,
+
+                            viviendas_cubiertas:
+                                enteroSeguro(
+                                    actividadBD.viviendas_cubiertas
+                                ),
+
+                            viviendas_encuestadas:
+                                enteroSeguro(
+                                    actividadBD.viviendas_encuestadas
+                                ),
+
+                            viviendas_rociadas:
+                                enteroSeguro(
+                                    actividadBD.viviendas_rociadas
+                                ),
+
+                            viviendas_ectodesparasitadas:
+                                enteroSeguro(
+                                    actividadBD.viviendas_ectodesparasitadas
+                                ),
+
+                            perros_intervenidos:
+                                enteroSeguro(
+                                    actividadBD.perros_intervenidos
+                                ),
+
+                            gatos_intervenidos:
+                                enteroSeguro(
+                                    actividadBD.gatos_intervenidos
+                                ),
+
+                            viviendas_inspeccionadas:
+                                enteroSeguro(
+                                    actividadBD.viviendas_inspeccionadas
+                                ),
+
+                            viviendas_con_garrapata:
+                                enteroSeguro(
+                                    actividadBD.viviendas_con_garrapata
+                                ),
+
+                            perros_inspeccionados:
+                                enteroSeguro(
+                                    actividadBD.perros_inspeccionados
+                                ),
+
+                            perros_con_garrapata:
+                                enteroSeguro(
+                                    actividadBD.perros_con_garrapata
+                                ),
+
+                            gatos_inspeccionados:
+                                enteroSeguro(
+                                    actividadBD.gatos_inspeccionados
+                                ),
+
+                            gatos_con_garrapata:
+                                enteroSeguro(
+                                    actividadBD.gatos_con_garrapata
+                                ),
+
+                            garrapatas_en_viviendas:
+                                enteroSeguro(
+                                    actividadBD.garrapatas_en_viviendas
+                                ),
+
+                            garrapatas_en_perros:
+                                enteroSeguro(
+                                    actividadBD.garrapatas_en_perros
+                                ),
+
+                            garrapatas_en_gatos:
+                                enteroSeguro(
+                                    actividadBD.garrapatas_en_gatos
+                                ),
+
+                            larvas_encontradas:
+                                enteroSeguro(
+                                    actividadBD.larvas_encontradas
+                                ),
+
+                            ninfas_encontradas:
+                                enteroSeguro(
+                                    actividadBD.ninfas_encontradas
+                                ),
+
+                            adultos_encontrados:
+                                enteroSeguro(
+                                    actividadBD.adultos_encontrados
+                                ),
+
+                            observaciones:
+                                actividadBD.observaciones || null,
+
+                            insumos:
+                                consumos
+                        };
+
+                    }
+                );
+
+
+            sectoresMap
+                .get(
+                    codigoSector
+                )
+                .manzanas
+                .push({
+                    /*
+                     * El ID es fundamental.
+                     * Le indica a la RPC que es UPDATE,
+                     * no una manzana nueva.
+                     */
+                    id:
+                        manzanaBD.id,
+
+                    manzana:
+                        manzanaBD.manzana || "",
+
+                    fecha_inicio:
+                        manzanaBD.fecha_inicio || null,
+
+                    fecha_fin:
+                        manzanaBD.fecha_fin || null,
+
+                    estatus:
+                        manzanaBD.estatus || "TRABAJADA",
+
+                    observaciones:
+                        manzanaBD.observaciones || null,
+
+                    resumen: {
+                        id:
+                            resumenBD.id || null,
+
+                        viviendas_visitadas:
+                            enteroSeguro(
+                                resumenBD.viviendas_visitadas
+                            ),
+
+                        viviendas_trabajadas:
+                            enteroSeguro(
+                                resumenBD.viviendas_trabajadas
+                            ),
+
+                        viviendas_cerradas:
+                            enteroSeguro(
+                                resumenBD.viviendas_cerradas
+                            ),
+
+                        viviendas_deshabitadas:
+                            enteroSeguro(
+                                resumenBD.viviendas_deshabitadas
+                            ),
+
+                        viviendas_renuentes:
+                            enteroSeguro(
+                                resumenBD.viviendas_renuentes
+                            ),
+
+                        lotes_baldios:
+                            enteroSeguro(
+                                resumenBD.lotes_baldios
+                            ),
+
+                        otros_inmuebles:
+                            enteroSeguro(
+                                resumenBD.otros_inmuebles
+                            ),
+
+                        habitantes_beneficiados:
+                            enteroSeguro(
+                                resumenBD.habitantes_beneficiados
+                            ),
+
+                        viviendas_con_perros:
+                            enteroSeguro(
+                                resumenBD.viviendas_con_perros
+                            ),
+
+                        viviendas_con_gatos:
+                            enteroSeguro(
+                                resumenBD.viviendas_con_gatos
+                            ),
+
+                        viviendas_con_perros_gatos:
+                            enteroSeguro(
+                                resumenBD.viviendas_con_perros_gatos
+                            ),
+
+                        viviendas_sin_animales:
+                            enteroSeguro(
+                                resumenBD.viviendas_sin_animales
+                            ),
+
+                        perros_censados:
+                            enteroSeguro(
+                                resumenBD.perros_censados
+                            ),
+
+                        gatos_censados:
+                            enteroSeguro(
+                                resumenBD.gatos_censados
+                            ),
+
+                        observaciones:
+                            resumenBD.observaciones || null
+                    },
+
+                    actividades
+                });
+
+        }
+    );
+
+
+    return {
+        id:
+            jornadaId,
+
+        tipo_jornada:
+            jornadaBD.codigo_tipo_jornada ||
+            jornadaBD.tipo_jornada ||
+            TIPOS_JORNADA.CONTINUACION,
+
+        fecha:
+            jornadaBD.fecha ||
+            fechaActualISO(),
+
+        motivo:
+            jornadaBD.motivo || null,
+
+        observaciones:
+            jornadaBD.observaciones || null,
+
+        sectores:
+            Array.from(
+                sectoresMap.values()
+            )
+    };
+}
+
+async function editarJornadaExistente(
+    jornadaId
+) {
+    if (!jornadaId) {
+        return;
+    }
+
+    renderizarCargaOperativo();
+
+    try {
+
+        const detalle =
+            await obtenerDetalleOperativoEditable(
+                obtenerToken(),
+                ESTADO.operativoSeleccionado.id
+            );
+
+
+        ESTADO.jornada =
+            construirJornadaDesdeDetalle(
+                detalle,
+                jornadaId
+            );
+
+
+        ESTADO.editandoJornada =
+            true;
+
+        ESTADO.jornadaEditandoId =
+            jornadaId;
+
+
+        /*
+         * Necesitamos existencia actual para que
+         * los consumos se calculen correctamente.
+         */
+        await cargarInventario();
+
+
+        renderizarEditorJornadaRetomada();
+
+    } catch (error) {
+
+        ESTADO.editandoJornada =
+            false;
+
+        ESTADO.jornadaEditandoId =
+            null;
+
+        renderizarErrorOperativo(
+            error
+        );
+
+    }
 }
 
 function normalizarJornadaParaEdicion(jornada = {}) {
@@ -3327,15 +3589,7 @@ function normalizarJornadaParaEdicion(jornada = {}) {
                     ...crearInsumoInicial(),
                     ...i,
                     id: i.id || i.consumo_id || null,
-                    accion: "SIN_CAMBIO",
-                    rangos_folios: obtenerArreglo(
-                        i.rangos_folios ||
-                        i.rangos_vacunacion
-                    ).map(rango => ({
-                        id: rango.id || null,
-                        folio_desde: rango.folio_desde ?? null,
-                        folio_hasta: rango.folio_hasta ?? null
-                    }))
+                    accion: "SIN_CAMBIO"
                 }))
             }))
         });
@@ -3352,25 +3606,6 @@ function normalizarJornadaParaEdicion(jornada = {}) {
     };
 }
 
-function construirPayloadEdicionJornadaActual() {
-    return {
-        fecha: ESTADO.jornada.fecha,
-        hora_inicio: ESTADO.jornada.hora_inicio || null,
-        hora_fin: ESTADO.jornada.hora_fin || null,
-        motivo: ESTADO.jornada.motivo || null,
-        observaciones: ESTADO.jornada.observaciones || null,
-        manzanas: ESTADO.jornada.sectores.flatMap(sector =>
-            sector.manzanas.map(manzana => ({
-                ...manzana,
-                sector: sector.sector,
-                resumen: {
-                    ...manzana.resumen,
-                    viviendas_visitadas: calcularViviendasVisitadas(manzana.resumen)
-                }
-            }))
-        )
-    };
-}
 
 function renderizarFormularioNuevaJornada() {
     const contenedor = document.getElementById("new-operation-journey-container");
@@ -3439,15 +3674,28 @@ function renderizarEditorJornadaRetomada() {
     const app = obtenerApp();
     const operativo = ESTADO.operativoSeleccionado || {};
 
+    const esEdicion =
+        ESTADO.editandoJornada &&
+        Boolean(ESTADO.jornadaEditandoId);
+
     app.innerHTML = `
         <div class="operative-page">
+
             ${crearEncabezadoPagina(
-                `${ESTADO.jornadaEditandoId ? "Editar jornada" : "Nueva jornada"} · ${operativo.folio_operativo || "Operativo"}`,
+                `${
+                    esEdicion
+                        ? "Editar jornada"
+                        : "Nueva jornada"
+                } · ${
+                    operativo.folio_operativo ||
+                    "Operativo"
+                }`,
                 ESTADO.jornada.tipo_jornada,
                 true
             )}
 
             <main class="operative-main">
+
                 <section class="operative-step">
                     ${crearPasoSectoresManzanas()}
                 </section>
@@ -3457,24 +3705,80 @@ function renderizarEditorJornadaRetomada() {
                 </section>
 
                 <footer class="wizard-footer">
-                    <div id="operative-global-message" class="form-message" role="alert"></div>
-                    ${ESTADO.jornadaEditandoId ? `
-                        <div class="form-group" style="min-width:280px">
-                            <label for="motivo-edicion-jornada">Motivo de la edición</label>
-                            <input id="motivo-edicion-jornada" type="text" maxlength="500" placeholder="Ej. Corrección de captura" required>
+
+                    <div
+                        id="operative-global-message"
+                        class="form-message"
+                        role="alert"
+                    ></div>
+
+                    ${esEdicion ? `
+                        <div class="form-group form-group--edit-reason">
+
+                            <label for="motivo-edicion-jornada">
+                                Motivo de la edición
+                            </label>
+
+                            <input
+                                id="motivo-edicion-jornada"
+                                type="text"
+                                maxlength="500"
+                                placeholder="Ej. Corrección de captura"
+                                autocomplete="off"
+                            >
+
                         </div>
                     ` : ""}
-                    <button id="btn-guardar-jornada-retomada" class="button button--primary" type="button">${ESTADO.jornadaEditandoId ? "Guardar cambios" : "Guardar jornada"}</button>
+
+                    <button
+                        id="btn-guardar-jornada-retomada"
+                        class="button button--primary"
+                        type="button"
+                    >
+                        ${
+                            esEdicion
+                                ? "Guardar cambios"
+                                : "Guardar jornada"
+                        }
+                    </button>
+
                 </footer>
+
             </main>
+
         </div>
     `;
 
-    document.getElementById("btn-cambiar-modo-operativo")?.addEventListener("click", renderizarDetalleOperativoRetomar);
-    document.getElementById("btn-operation-home")?.addEventListener("click", () => navegar("/inicio"));
+    document
+        .getElementById(
+            "btn-cambiar-modo-operativo"
+        )
+        ?.addEventListener(
+            "click",
+            renderizarDetalleOperativoRetomar
+        );
+
+    document
+        .getElementById(
+            "btn-operation-home"
+        )
+        ?.addEventListener(
+            "click",
+            () => navegar("/inicio")
+        );
+
     registrarEventosSectoresManzanas();
+
     registrarEventosActividades();
-    document.getElementById("btn-guardar-jornada-retomada")?.addEventListener("click", guardarJornadaRetomada);
+
+    document
+        .getElementById(
+            "btn-guardar-jornada-retomada"
+        )
+        ?.addEventListener(
+            "click",
+            guardarJornadaRetomada
+        );
 }
 
 async function guardarJornadaRetomada() {
@@ -3483,31 +3787,87 @@ async function guardarJornadaRetomada() {
     }
 
     try {
+
         validarSectoresManzanas();
         validarActividades();
-        ESTADO.guardando = true;
 
-        if (ESTADO.jornadaEditandoId) {
-            const motivoEdicion = normalizarTexto(document.getElementById("motivo-edicion-jornada")?.value);
-            if (!motivoEdicion) {
-                throw new Error("Indique el motivo de la edición.");
+        ESTADO.guardando =
+            true;
+
+
+        if (
+            ESTADO.editandoJornada &&
+            ESTADO.jornadaEditandoId
+        ) {
+
+            const motivoEdicion =
+                window.prompt(
+                    "Indique el motivo de la edición:"
+                );
+
+
+            if (
+                !motivoEdicion ||
+                !motivoEdicion.trim()
+            ) {
+                throw new Error(
+                    "Debe indicar el motivo de la edición."
+                );
             }
-            await editarJornadaOperativo(obtenerToken(), ESTADO.jornadaEditandoId, {
-                ...construirPayloadEdicionJornadaActual(),
-                motivo_edicion: motivoEdicion
-            });
+
+
+            const payload =
+                construirPayloadEdicionJornadaActual(
+                    motivoEdicion
+                );
+
+
+            await editarJornadaOperativo(
+                obtenerToken(),
+                ESTADO.jornadaEditandoId,
+                payload
+            );
+
         } else {
-            await guardarJornadaOperativo(obtenerToken(), {
-                operativo_id: ESTADO.operativoSeleccionado.id,
-                ...construirPayloadJornadaActual()
-            });
+
+            await guardarJornadaOperativo(
+                obtenerToken(),
+                {
+                    operativo_id:
+                        ESTADO.operativoSeleccionado.id,
+
+                    ...construirPayloadJornadaActual()
+                }
+            );
+
         }
 
-        ESTADO.jornadaEditandoId = null;
-        await seleccionarOperativoRetomar(ESTADO.operativoSeleccionado.id);
+
+        ESTADO.guardando =
+            false;
+
+        ESTADO.editandoJornada =
+            false;
+
+        ESTADO.jornadaEditandoId =
+            null;
+
+
+        await seleccionarOperativoRetomar(
+            ESTADO.operativoSeleccionado.id
+        );
+
     } catch (error) {
-        ESTADO.guardando = false;
-        mostrarMensajeGlobal(error?.message || "No fue posible guardar la jornada.", true);
+
+        ESTADO.guardando =
+            false;
+
+        mostrarMensajeGlobal(
+            error?.message ||
+            "No fue posible guardar la jornada.",
+            true
+        );
+
     }
 }
 
@@ -3578,7 +3938,118 @@ function actualizarFechasActividades() {
         });
     });
 }
+function construirPayloadEdicionJornadaActual(
+    motivoEdicion
+) {
+    return {
+        fecha:
+            ESTADO.jornada.fecha,
 
+        motivo:
+            ESTADO.jornada.motivo,
+
+        observaciones:
+            ESTADO.jornada.observaciones,
+
+        motivo_edicion:
+            motivoEdicion,
+
+        manzanas:
+            ESTADO.jornada.sectores.flatMap(
+                sector =>
+                    sector.manzanas.map(
+                        manzana => ({
+                            id:
+                                manzana.id || null,
+
+                            sector:
+                                sector.sector,
+
+                            manzana:
+                                manzana.manzana,
+
+                            fecha_inicio:
+                                manzana.fecha_inicio ||
+                                ESTADO.jornada.fecha,
+
+                            fecha_fin:
+                                manzana.fecha_fin || null,
+
+                            estatus:
+                                manzana.estatus ||
+                                "TRABAJADA",
+
+                            observaciones:
+                                manzana.observaciones || null,
+
+                            resumen:
+                                {
+                                    ...manzana.resumen,
+
+                                    viviendas_visitadas:
+                                        calcularViviendasVisitadasResumen(
+                                            manzana.resumen
+                                        )
+                                },
+
+                            actividades:
+                                manzana.actividades.map(
+                                    actividad => ({
+                                        ...actividad,
+
+                                        id:
+                                            actividad.id || null,
+
+                                        insumos:
+                                            actividad.insumos.map(
+                                                insumo => ({
+                                                    ...insumo,
+
+                                                    id:
+                                                        insumo.id ||
+                                                        null,
+
+                                                    /*
+                                                     * Nuevos insumos:
+                                                     */
+                                                    accion:
+                                                        insumo.id
+                                                            ? (
+                                                                insumo.accion ||
+                                                                "SIN_CAMBIO"
+                                                            )
+                                                            : "AGREGAR"
+                                                })
+                                            )
+                                    })
+                                )
+                        })
+                    )
+            )
+    };
+}
+
+function calcularViviendasVisitadasResumen(
+    resumen = {}
+) {
+    return (
+        enteroSeguro(
+            resumen.viviendas_trabajadas
+        )
+        +
+        enteroSeguro(
+            resumen.viviendas_cerradas
+        )
+        +
+        enteroSeguro(
+            resumen.viviendas_deshabitadas
+        )
+        +
+        enteroSeguro(
+            resumen.viviendas_renuentes
+        )
+    );
+}
 function limpiarActividadesIncompatibles() {
     const idsPermitidos = new Set(obtenerTiposActividadPrograma().map(tipo => tipo.id));
     ESTADO.jornada.sectores.forEach(sector => {

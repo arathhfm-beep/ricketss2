@@ -626,6 +626,66 @@ export async function obtenerOperativoJornadas(
 }
 
 
+
+/*
+==========================================================
+DETALLE EDITABLE DEL OPERATIVO
+==========================================================
+*/
+
+export async function obtenerDetalleOperativoEditable(
+    token,
+    operativoId
+) {
+    validarToken(token);
+
+    const { data, error } =
+        await supabase.rpc(
+            "consultar_detalle_operativo",
+            {
+                p_token:
+                    token,
+
+                p_operativo_id:
+                    validarUUID(
+                        operativoId,
+                        "identificador del operativo"
+                    )
+            }
+        );
+
+    if (error) {
+        throw crearError(
+            error,
+            "No fue posible obtener el detalle editable del operativo."
+        );
+    }
+
+    const respuesta =
+        validarRespuesta(
+            data,
+            "No fue posible obtener el detalle editable del operativo."
+        );
+
+    return {
+        operativo:
+            obtenerObjeto(
+                respuesta.operativo
+            ),
+
+        totales:
+            obtenerObjeto(
+                respuesta.totales
+            ),
+
+        manzanas:
+            obtenerArreglo(
+                respuesta.manzanas
+            )
+    };
+}
+
+
 /*
 ==========================================================
 GUARDAR JORNADA
