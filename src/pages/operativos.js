@@ -258,7 +258,8 @@ function crearInsumoInicial() {
         unidad: null,
         presentacion: null,
         contenido_presentacion: null,
-        existencia_disponible: 0
+        existencia_disponible: 0,
+        rangos_folios: []
     };
 }
 
@@ -1609,7 +1610,8 @@ function actividadPermiteInsumos(tipoActividadId) {
         codigo.includes("DESPARAS") ||
         codigo.includes("TRATAMIENTO") ||
         codigo.includes("ROCI") ||
-        codigo.includes("INSECTICIDA")
+        codigo.includes("INSECTICIDA") ||
+        codigo.includes("VACUN")
     );
 }
 
@@ -1940,6 +1942,18 @@ function crearFormularioInsumos(
                                                     )}
                                                 </span>
                                             </div>
+
+                                            ${
+                                                esActividadVacunacion(actividad)
+                                                    ? crearRangosVacunacionInsumo(
+                                                        insumo,
+                                                        indiceSector,
+                                                        indiceManzana,
+                                                        indiceActividad,
+                                                        indiceInsumo
+                                                    )
+                                                    : ""
+                                            }
 
                                             <button
                                                 class="
@@ -2383,6 +2397,8 @@ function registrarEventosActividades() {
             });
         });
     });
+
+    registrarEventosRangosVacunacion();
 }
 
 function actualizarResumenConsumoEnFila(elemento, insumo) {
@@ -2415,6 +2431,468 @@ function actualizarResumenConsumoEnFila(elemento, insumo) {
         posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
     }
 }
+
+
+/*
+==========================================================
+VACUNACIÓN - FOLIOS POR LOTE
+==========================================================
+*/
+
+function esActividadVacunacion(actividad) {
+    const codigo =
+        String(
+            obtenerCodigoTipoActividad(
+                actividad?.tipo_actividad_id
+            ) || ""
+        )
+            .trim()
+            .toUpperCase();
+
+    return codigo.includes("VACUN");
+}
+
+function crearRangoVacunacionInicial() {
+    return {
+        id: null,
+        folio_desde: null,
+        folio_hasta: null
+    };
+}
+
+function obtenerRangosVacunacion(insumo) {
+    if (!Array.isArray(insumo.rangos_folios)) {
+        insumo.rangos_folios = [];
+    }
+
+    return insumo.rangos_folios;
+}
+
+function cantidadFoliosRango(rango) {
+    const desde =
+        enteroSeguro(
+            rango?.folio_desde
+        );
+
+    const hasta =
+        enteroSeguro(
+            rango?.folio_hasta
+        );
+
+    if (
+        desde <= 0 ||
+        hasta < desde
+    ) {
+        return 0;
+    }
+
+    return hasta - desde + 1;
+}
+
+function crearRangosVacunacionInsumo(
+    insumo,
+    indiceSector,
+    indiceManzana,
+    indiceActividad,
+    indiceInsumo
+) {
+    const rangos =
+        obtenerRangosVacunacion(
+            insumo
+        );
+
+    const total =
+        rangos.reduce(
+            (suma, rango) =>
+                suma +
+                cantidadFoliosRango(
+                    rango
+                ),
+            0
+        );
+
+    return `
+        <div class="form-group form-group--full">
+
+            <label>
+                Folios de vacunación asociados a este lote
+            </label>
+
+            <p class="inventory-consumption-help">
+                Total asociado al lote:
+                ${total} folio(s).
+            </p>
+
+            <div class="subrecord-list">
+
+                ${
+                    rangos.length === 0
+                        ? `
+                            <p class="empty-message">
+                                No hay rangos de folios registrados.
+                            </p>
+                        `
+                        : rangos
+                            .map(
+                                (
+                                    rango,
+                                    indiceRango
+                                ) => `
+                                    <div class="subrecord-row">
+
+                                        <div class="form-group">
+                                            <label>
+                                                Folio desde
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_desde ?? ""}"
+                                                data-rango-vacunacion-campo="folio_desde"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-insumo-index="${indiceInsumo}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                Folio hasta
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_hasta ?? ""}"
+                                                data-rango-vacunacion-campo="folio_hasta"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-insumo-index="${indiceInsumo}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                Cantidad
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                value="${cantidadFoliosRango(rango)}"
+                                                readonly
+                                            >
+                                        </div>
+
+                                        <button
+                                            class="button button--danger"
+                                            type="button"
+                                            data-eliminar-rango-vacunacion="${indiceRango}"
+                                            data-sector-index="${indiceSector}"
+                                            data-manzana-index="${indiceManzana}"
+                                            data-actividad-index="${indiceActividad}"
+                                            data-insumo-index="${indiceInsumo}"
+                                        >
+                                            Eliminar rango
+                                        </button>
+
+                                    </div>
+                                `
+                            )
+                            .join("")
+                }
+
+            </div>
+
+            <button
+                class="button button--secondary"
+                type="button"
+                data-agregar-rango-vacunacion="true"
+                data-sector-index="${indiceSector}"
+                data-manzana-index="${indiceManzana}"
+                data-actividad-index="${indiceActividad}"
+                data-insumo-index="${indiceInsumo}"
+                ${!insumo.lote_id ? "disabled" : ""}
+            >
+                Agregar rango de folios
+            </button>
+
+        </div>
+    `;
+}
+
+function obtenerRangoVacunacionPorElemento(elemento) {
+    const insumo =
+        obtenerInsumoPorElemento(
+            elemento
+        );
+
+    if (!insumo) {
+        return null;
+    }
+
+    return obtenerRangosVacunacion(
+        insumo
+    )[
+        Number(
+            elemento.dataset.rangoIndex
+        )
+    ] || null;
+}
+
+function marcarInsumoVacunacionModificado(insumo) {
+    if (
+        insumo?.id &&
+        String(
+            insumo.accion ||
+            "SIN_CAMBIO"
+        )
+            .trim()
+            .toUpperCase() ===
+            "SIN_CAMBIO"
+    ) {
+        insumo.accion =
+            "REEMPLAZAR";
+    }
+}
+
+function registrarEventosRangosVacunacion() {
+
+    document
+        .querySelectorAll(
+            "[data-agregar-rango-vacunacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                boton
+                            );
+
+                        if (!insumo) {
+                            return;
+                        }
+
+                        obtenerRangosVacunacion(
+                            insumo
+                        ).push(
+                            crearRangoVacunacionInicial()
+                        );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-eliminar-rango-vacunacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                boton
+                            );
+
+                        if (!insumo) {
+                            return;
+                        }
+
+                        obtenerRangosVacunacion(
+                            insumo
+                        ).splice(
+                            Number(
+                                boton.dataset
+                                    .eliminarRangoVacunacion
+                            ),
+                            1
+                        );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-rango-vacunacion-campo]"
+        )
+        .forEach(
+            elemento => {
+                elemento.addEventListener(
+                    "input",
+                    () => {
+                        const insumo =
+                            obtenerInsumoPorElemento(
+                                elemento
+                            );
+
+                        const rango =
+                            obtenerRangoVacunacionPorElemento(
+                                elemento
+                            );
+
+                        const campo =
+                            elemento.dataset
+                                .rangoVacunacionCampo;
+
+                        if (
+                            !insumo ||
+                            !rango ||
+                            !campo
+                        ) {
+                            return;
+                        }
+
+                        rango[campo] =
+                            elemento.value === ""
+                                ? null
+                                : enteroSeguro(
+                                    elemento.value
+                                );
+
+                        marcarInsumoVacunacionModificado(
+                            insumo
+                        );
+                    }
+                );
+
+                elemento.addEventListener(
+                    "change",
+                    () => {
+                        const posicionScroll =
+                            window.scrollY;
+
+                        renderizarCapturaJornadaActual();
+
+                        requestAnimationFrame(
+                            () => {
+                                window.scrollTo({
+                                    top:
+                                        posicionScroll,
+                                    behavior:
+                                        "auto"
+                                });
+                            }
+                        );
+                    }
+                );
+            }
+        );
+}
+
+function validarRangosVacunacion(
+    actividad,
+    manzana
+) {
+    const insumos =
+        obtenerArreglo(
+            actividad?.insumos
+        );
+
+    if (insumos.length === 0) {
+        throw new Error(
+            `La vacunación de la manzana ${manzana} debe registrar al menos un lote de vacuna.`
+        );
+    }
+
+    const foliosUsados =
+        new Set();
+
+    insumos.forEach(
+        (
+            insumo,
+            indiceInsumo
+        ) => {
+            const rangos =
+                obtenerRangosVacunacion(
+                    insumo
+                );
+
+            if (rangos.length === 0) {
+                throw new Error(
+                    `Registre al menos un rango de folios para el lote ${indiceInsumo + 1} de vacunación.`
+                );
+            }
+
+            rangos.forEach(
+                (
+                    rango,
+                    indiceRango
+                ) => {
+                    const desde =
+                        enteroSeguro(
+                            rango.folio_desde
+                        );
+
+                    const hasta =
+                        enteroSeguro(
+                            rango.folio_hasta
+                        );
+
+                    if (
+                        desde <= 0 ||
+                        hasta <= 0
+                    ) {
+                        throw new Error(
+                            `Complete el rango ${indiceRango + 1} del lote ${indiceInsumo + 1} de vacunación.`
+                        );
+                    }
+
+                    if (hasta < desde) {
+                        throw new Error(
+                            `El folio final ${hasta} no puede ser menor que el folio inicial ${desde}.`
+                        );
+                    }
+
+                    for (
+                        let folio = desde;
+                        folio <= hasta;
+                        folio += 1
+                    ) {
+                        if (
+                            foliosUsados.has(
+                                folio
+                            )
+                        ) {
+                            throw new Error(
+                                `El folio ${folio} de vacunación está registrado más de una vez.`
+                            );
+                        }
+
+                        foliosUsados.add(
+                            folio
+                        );
+                    }
+                }
+            );
+        }
+    );
+}
+
 
 function irPasoAnterior() {
     guardarCamposInformacionGeneral();
@@ -2647,6 +3125,13 @@ function validarActividades() {
                         );
                     }
                 });
+
+                if (esActividadVacunacion(actividad)) {
+                    validarRangosVacunacion(
+                        actividad,
+                        manzana.manzana
+                    );
+                }
             });
         });
     });
@@ -3589,7 +4074,15 @@ function normalizarJornadaParaEdicion(jornada = {}) {
                     ...crearInsumoInicial(),
                     ...i,
                     id: i.id || i.consumo_id || null,
-                    accion: "SIN_CAMBIO"
+                    accion: "SIN_CAMBIO",
+                    rangos_folios: obtenerArreglo(
+                        i.rangos_folios ||
+                        i.rangos_vacunacion
+                    ).map(rango => ({
+                        id: rango.id || null,
+                        folio_desde: rango.folio_desde ?? null,
+                        folio_hasta: rango.folio_hasta ?? null
+                    }))
                 }))
             }))
         });
