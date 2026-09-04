@@ -240,7 +240,10 @@ function crearActividadInicial() {
         larvas_encontradas: 0,
         ninfas_encontradas: 0,
         adultos_encontrados: 0,
+        muestras_enviadas: 0,
+        garrapatas_positivas: null,
         rangos_vacunacion: [],
+        rangos_esterilizacion: [],
         observaciones: null,
         insumos: []
     };
@@ -1424,6 +1427,25 @@ function crearCamposSegunActividad(
                 indiceManzana,
                 indiceActividad
             )}
+
+            ${crearCampoActividadNumero(
+                "muestras_enviadas",
+                "Muestras enviadas (garrapatas)",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumeroNullable(
+                "garrapatas_positivas",
+                "Garrapatas positivas (resultado)",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad,
+                "Dejar vacío mientras el resultado esté pendiente."
+            )}
         `;
     }
 
@@ -1486,6 +1508,46 @@ function crearCamposSegunActividad(
             ${crearCampoActividadNumero(
                 "viviendas_rociadas",
                 "Viviendas rociadas",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+        `;
+    }
+
+
+
+    /*
+    ==========================================================
+    ESTERILIZACIÓN
+    ==========================================================
+    */
+
+    if (
+        contiene("ESTERIL")
+    ) {
+        return `
+
+            ${crearCampoActividadNumero(
+                "perros_intervenidos",
+                "Perros esterilizados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
+                "gatos_intervenidos",
+                "Gatos esterilizados",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearRangosEsterilizacionActividad(
                 actividad,
                 indiceSector,
                 indiceManzana,
@@ -1597,6 +1659,49 @@ function crearCampoActividadNumero(campo, etiqueta, actividad, indiceSector, ind
         </div>
     `;
 }
+
+
+function crearCampoActividadNumeroNullable(
+    campo,
+    etiqueta,
+    actividad,
+    indiceSector,
+    indiceManzana,
+    indiceActividad,
+    ayuda = ""
+) {
+    const valor =
+        actividad[campo] === null ||
+        actividad[campo] === undefined ||
+        actividad[campo] === ""
+            ? ""
+            : enteroSeguro(
+                actividad[campo]
+            );
+
+    return `
+        <div class="form-group">
+            <label>${escaparHTML(etiqueta)}</label>
+            <input
+                type="number"
+                min="0"
+                step="1"
+                value="${valor}"
+                data-actividad-campo="${campo}"
+                data-actividad-nullable="true"
+                data-sector-index="${indiceSector}"
+                data-manzana-index="${indiceManzana}"
+                data-actividad-index="${indiceActividad}"
+            >
+            ${
+                ayuda
+                    ? `<small class="form-help">${escaparHTML(ayuda)}</small>`
+                    : ""
+            }
+        </div>
+    `;
+}
+
 
 function actividadPermiteInsumos(tipoActividadId) {
     const codigo = String(
@@ -2297,9 +2402,15 @@ function registrarEventosActividades() {
                 return;
             }
 
-            actividad[campo] = elemento.type === "number"
-                ? enteroSeguro(elemento.value)
-                : normalizarTexto(elemento.value);
+            actividad[campo] =
+                elemento.type === "number"
+                    ? (
+                        elemento.dataset.actividadNullable === "true" &&
+                        elemento.value === ""
+                            ? null
+                            : enteroSeguro(elemento.value)
+                    )
+                    : normalizarTexto(elemento.value);
 
             if (campo === "tipo_actividad_id") {
                 renderizarCapturaJornadaActual();
@@ -2399,6 +2510,7 @@ function registrarEventosActividades() {
     });
 
     registrarEventosRangosVacunacion();
+    registrarEventosRangosEsterilizacion();
 }
 
 function actualizarResumenConsumoEnFila(elemento, insumo) {
@@ -2430,6 +2542,389 @@ function actualizarResumenConsumoEnFila(elemento, insumo) {
     if (posterior) {
         posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
     }
+}
+
+
+
+/*
+==========================================================
+ESTERILIZACIÓN - FOLIOS POR ACTIVIDAD
+==========================================================
+*/
+
+function esActividadEsterilizacion(actividad) {
+    const codigo =
+        String(
+            obtenerCodigoTipoActividad(
+                actividad?.tipo_actividad_id
+            ) || ""
+        )
+            .trim()
+            .toUpperCase();
+
+    return codigo.includes("ESTERIL");
+}
+
+function crearRangoEsterilizacionInicial() {
+    return {
+        id: null,
+        folio_desde: null,
+        folio_hasta: null
+    };
+}
+
+function obtenerRangosEsterilizacion(actividad) {
+    if (!Array.isArray(actividad.rangos_esterilizacion)) {
+        actividad.rangos_esterilizacion = [];
+    }
+
+    return actividad.rangos_esterilizacion;
+}
+
+function crearRangosEsterilizacionActividad(
+    actividad,
+    indiceSector,
+    indiceManzana,
+    indiceActividad
+) {
+    const rangos =
+        obtenerRangosEsterilizacion(
+            actividad
+        );
+
+    const total =
+        rangos.reduce(
+            (suma, rango) =>
+                suma +
+                cantidadFoliosRango(
+                    rango
+                ),
+            0
+        );
+
+    return `
+        <div class="form-group form-group--full">
+
+            <label>
+                Folios de esterilización
+            </label>
+
+            <p class="inventory-consumption-help">
+                Total:
+                ${total} folio(s).
+            </p>
+
+            <div class="subrecord-list">
+
+                ${
+                    rangos.length === 0
+                        ? `
+                            <p class="empty-message">
+                                No hay rangos de folios registrados.
+                            </p>
+                        `
+                        : rangos
+                            .map(
+                                (
+                                    rango,
+                                    indiceRango
+                                ) => `
+                                    <div class="subrecord-row">
+
+                                        <div class="form-group">
+                                            <label>
+                                                Folio desde
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_desde ?? ""}"
+                                                data-rango-esterilizacion-campo="folio_desde"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                Folio hasta
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value="${rango.folio_hasta ?? ""}"
+                                                data-rango-esterilizacion-campo="folio_hasta"
+                                                data-sector-index="${indiceSector}"
+                                                data-manzana-index="${indiceManzana}"
+                                                data-actividad-index="${indiceActividad}"
+                                                data-rango-index="${indiceRango}"
+                                            >
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                Cantidad
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                value="${cantidadFoliosRango(rango)}"
+                                                readonly
+                                            >
+                                        </div>
+
+                                        <button
+                                            class="button button--danger"
+                                            type="button"
+                                            data-eliminar-rango-esterilizacion="${indiceRango}"
+                                            data-sector-index="${indiceSector}"
+                                            data-manzana-index="${indiceManzana}"
+                                            data-actividad-index="${indiceActividad}"
+                                        >
+                                            Eliminar rango
+                                        </button>
+
+                                    </div>
+                                `
+                            )
+                            .join("")
+                }
+
+            </div>
+
+            <button
+                class="button button--secondary"
+                type="button"
+                data-agregar-rango-esterilizacion="true"
+                data-sector-index="${indiceSector}"
+                data-manzana-index="${indiceManzana}"
+                data-actividad-index="${indiceActividad}"
+            >
+                Agregar rango de folios
+            </button>
+
+        </div>
+    `;
+}
+
+function obtenerRangoEsterilizacionPorElemento(elemento) {
+    const actividad =
+        obtenerActividadPorElemento(
+            elemento
+        );
+
+    if (!actividad) {
+        return null;
+    }
+
+    return obtenerRangosEsterilizacion(
+        actividad
+    )[
+        Number(
+            elemento.dataset.rangoIndex
+        )
+    ] || null;
+}
+
+function registrarEventosRangosEsterilizacion() {
+
+    document
+        .querySelectorAll(
+            "[data-agregar-rango-esterilizacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const actividad =
+                            obtenerActividadPorElemento(
+                                boton
+                            );
+
+                        if (!actividad) {
+                            return;
+                        }
+
+                        obtenerRangosEsterilizacion(
+                            actividad
+                        ).push(
+                            crearRangoEsterilizacionInicial()
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-eliminar-rango-esterilizacion]"
+        )
+        .forEach(
+            boton => {
+                boton.addEventListener(
+                    "click",
+                    () => {
+                        const actividad =
+                            obtenerActividadPorElemento(
+                                boton
+                            );
+
+                        if (!actividad) {
+                            return;
+                        }
+
+                        obtenerRangosEsterilizacion(
+                            actividad
+                        ).splice(
+                            Number(
+                                boton.dataset
+                                    .eliminarRangoEsterilizacion
+                            ),
+                            1
+                        );
+
+                        renderizarCapturaJornadaActual();
+                    }
+                );
+            }
+        );
+
+    document
+        .querySelectorAll(
+            "[data-rango-esterilizacion-campo]"
+        )
+        .forEach(
+            elemento => {
+                elemento.addEventListener(
+                    "input",
+                    () => {
+                        const rango =
+                            obtenerRangoEsterilizacionPorElemento(
+                                elemento
+                            );
+
+                        const campo =
+                            elemento.dataset
+                                .rangoEsterilizacionCampo;
+
+                        if (
+                            !rango ||
+                            !campo
+                        ) {
+                            return;
+                        }
+
+                        rango[campo] =
+                            elemento.value === ""
+                                ? null
+                                : enteroSeguro(
+                                    elemento.value
+                                );
+                    }
+                );
+
+                elemento.addEventListener(
+                    "change",
+                    () => {
+                        const posicionScroll =
+                            window.scrollY;
+
+                        renderizarCapturaJornadaActual();
+
+                        requestAnimationFrame(
+                            () => {
+                                window.scrollTo({
+                                    top:
+                                        posicionScroll,
+                                    behavior:
+                                        "auto"
+                                });
+                            }
+                        );
+                    }
+                );
+            }
+        );
+}
+
+function validarRangosEsterilizacion(
+    actividad,
+    manzana
+) {
+    const rangos =
+        obtenerRangosEsterilizacion(
+            actividad
+        );
+
+    if (rangos.length === 0) {
+        throw new Error(
+            `La esterilización de la manzana ${manzana} debe registrar al menos un rango de folios.`
+        );
+    }
+
+    const foliosUsados =
+        new Set();
+
+    rangos.forEach(
+        (
+            rango,
+            indiceRango
+        ) => {
+            const desde =
+                enteroSeguro(
+                    rango.folio_desde
+                );
+
+            const hasta =
+                enteroSeguro(
+                    rango.folio_hasta
+                );
+
+            if (
+                desde <= 0 ||
+                hasta <= 0
+            ) {
+                throw new Error(
+                    `Complete el rango ${indiceRango + 1} de esterilización.`
+                );
+            }
+
+            if (hasta < desde) {
+                throw new Error(
+                    `El folio final ${hasta} no puede ser menor que el folio inicial ${desde}.`
+                );
+            }
+
+            for (
+                let folio = desde;
+                folio <= hasta;
+                folio += 1
+            ) {
+                if (
+                    foliosUsados.has(
+                        folio
+                    )
+                ) {
+                    throw new Error(
+                        `El folio ${folio} de esterilización está registrado más de una vez.`
+                    );
+                }
+
+                foliosUsados.add(
+                    folio
+                );
+            }
+        }
+    );
 }
 
 
@@ -3126,8 +3621,50 @@ function validarActividades() {
                     }
                 });
 
+                const codigoActividad =
+                    String(
+                        obtenerCodigoTipoActividad(
+                            actividad.tipo_actividad_id
+                        ) || ""
+                    )
+                        .trim()
+                        .toUpperCase();
+
+                if (
+                    codigoActividad.includes("ENTOMO") ||
+                    codigoActividad.includes("GARRAPATA") ||
+                    codigoActividad.includes("MUESTRA") ||
+                    codigoActividad.includes("ENCUESTA")
+                ) {
+                    const enviadas =
+                        enteroSeguro(
+                            actividad.muestras_enviadas
+                        );
+
+                    const positivas =
+                        actividad.garrapatas_positivas;
+
+                    if (
+                        positivas !== null &&
+                        positivas !== undefined &&
+                        positivas !== "" &&
+                        enteroSeguro(positivas) > enviadas
+                    ) {
+                        throw new Error(
+                            `En la manzana ${manzana.manzana}, las garrapatas positivas no pueden superar las muestras enviadas.`
+                        );
+                    }
+                }
+
                 if (esActividadVacunacion(actividad)) {
                     validarRangosVacunacion(
+                        actividad,
+                        manzana.manzana
+                    );
+                }
+
+                if (esActividadEsterilizacion(actividad)) {
+                    validarRangosEsterilizacion(
                         actividad,
                         manzana.manzana
                     );
@@ -3678,7 +4215,8 @@ function construirJornadaDesdeDetalle(
 
                         const consumos =
                             obtenerArreglo(
-                                actividadBD.consumos
+                                actividadBD.consumos ||
+                                actividadBD.insumos
                             )
                             .map(
                                 consumoBD => ({
@@ -3717,6 +4255,23 @@ function construirJornadaDesdeDetalle(
 
                                     existencia_disponible:
                                         0,
+
+                                    rangos_folios:
+                                        obtenerArreglo(
+                                            consumoBD.rangos_folios ||
+                                            consumoBD.rangos_vacunacion
+                                        ).map(
+                                            rango => ({
+                                                id:
+                                                    rango.id || null,
+
+                                                folio_desde:
+                                                    rango.folio_desde ?? null,
+
+                                                folio_hasta:
+                                                    rango.folio_hasta ?? null
+                                            })
+                                        ),
 
                                     /*
                                      * Muy importante:
@@ -3837,6 +4392,39 @@ function construirJornadaDesdeDetalle(
                             adultos_encontrados:
                                 enteroSeguro(
                                     actividadBD.adultos_encontrados
+                                ),
+
+                            muestras_enviadas:
+                                enteroSeguro(
+                                    actividadBD.muestras_enviadas
+                                ),
+
+                            garrapatas_positivas:
+                                (
+                                    actividadBD.garrapatas_positivas === null ||
+                                    actividadBD.garrapatas_positivas === undefined ||
+                                    actividadBD.garrapatas_positivas === ""
+                                )
+                                    ? null
+                                    : enteroSeguro(
+                                        actividadBD.garrapatas_positivas
+                                    ),
+
+                            rangos_esterilizacion:
+                                obtenerArreglo(
+                                    actividadBD.rangos_esterilizacion ||
+                                    actividadBD.folios_esterilizacion
+                                ).map(
+                                    rango => ({
+                                        id:
+                                            rango.id || null,
+
+                                        folio_desde:
+                                            rango.folio_desde ?? null,
+
+                                        folio_hasta:
+                                            rango.folio_hasta ?? null
+                                    })
                                 ),
 
                             observaciones:
@@ -4070,6 +4658,14 @@ function normalizarJornadaParaEdicion(jornada = {}) {
                 ...crearActividadInicial(),
                 ...a,
                 id: a.id || a.actividad_manzana_id || null,
+                rangos_esterilizacion: obtenerArreglo(
+                    a.rangos_esterilizacion ||
+                    a.folios_esterilizacion
+                ).map(rango => ({
+                    id: rango.id || null,
+                    folio_desde: rango.folio_desde ?? null,
+                    folio_hasta: rango.folio_hasta ?? null
+                })),
                 insumos: obtenerArreglo(a.insumos || a.consumos).map(i => ({
                     ...crearInsumoInicial(),
                     ...i,

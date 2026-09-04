@@ -1153,6 +1153,72 @@ function construirActividadManzana(
                 datos.adultos_encontrados
             ),
 
+        muestras_enviadas:
+            normalizarEntero(
+                datos.muestras_enviadas
+            ),
+
+        garrapatas_positivas:
+            (
+                datos.garrapatas_positivas === null ||
+                datos.garrapatas_positivas === undefined ||
+                datos.garrapatas_positivas === ""
+            )
+                ? null
+                : normalizarEntero(
+                    datos.garrapatas_positivas
+                ),
+
+        rangos_esterilizacion:
+            obtenerArreglo(
+                datos.rangos_esterilizacion
+            ).map(
+                (
+                    rango,
+                    indiceRango
+                ) => {
+                    const datosRango =
+                        obtenerObjeto(
+                            rango
+                        );
+
+                    const folioDesde =
+                        normalizarEntero(
+                            datosRango.folio_desde
+                        );
+
+                    const folioHasta =
+                        normalizarEntero(
+                            datosRango.folio_hasta
+                        );
+
+                    if (
+                        folioDesde <= 0 ||
+                        folioHasta <= 0 ||
+                        folioHasta < folioDesde
+                    ) {
+                        throw new Error(
+                            `El rango de folios de esterilización ${
+                                indiceRango + 1
+                            } no es válido.`
+                        );
+                    }
+
+                    return {
+                        id:
+                            normalizarTexto(
+                                datosRango.id
+                            ),
+
+                        folio_desde:
+                            folioDesde,
+
+                        folio_hasta:
+                            folioHasta
+                    };
+                }
+            ),
+
         observaciones:
             normalizarTexto(
                 datos.observaciones
