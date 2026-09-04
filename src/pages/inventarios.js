@@ -488,7 +488,7 @@ function crearCamposMovimientoExistente(operacion) {
         <div class="form-grid form-grid--two inventory-dynamic-section">
             ${requiereOrigen ? `<div class="form-group"><label for="movement-origin-jur">Jurisdicción origen</label><select id="movement-origin-jur" required><option value="">Seleccione</option>${opcionesJurisdicciones()}</select></div>` : ""}
             ${requiereDestino ? `<div class="form-group"><label for="movement-destination-jur">Jurisdicción destino</label><select id="movement-destination-jur" required><option value="">Seleccione</option>${opcionesJurisdicciones()}</select></div>` : ""}
-            <div class="form-group form-group--full"><label for="movement-lot">Insumo y lote</label><select id="movement-lot" required><option value="">Seleccione</option>${opcionesLotes()}</select></div>
+            <div class="form-group form-group--full"><label for="movement-lot">Insumo y lote</label><select id="movement-lot" required ${requiereOrigen ? "disabled" : ""}><option value="">${requiereOrigen ? "Seleccione primero la jurisdicción origen" : "Seleccione"}</option>${requiereOrigen ? "" : opcionesLotes()}</select></div>
             ${crearCamposCantidad("Cantidad")}
             <div class="form-group form-group--full"><div id="movement-equivalence" class="inventory-help"></div></div>
             <div class="form-group form-group--full"><label for="movement-reason">Motivo</label><input id="movement-reason" maxlength="250" ${operacion.startsWith("AJUSTE") ? "required" : ""}></div>
@@ -610,14 +610,55 @@ function actualizarResumenDistribucion() {
     contenedor.classList.toggle("inventory-help--error", restante < 0);
 }
 
-function actualizarLotesPorOrigen() {
+async function actualizarLotesPorOrigen() {
     const origen = valor("movement-origin-jur");
     const selector = document.getElementById("movement-lot");
     if (!selector) return;
-    selector.innerHTML = `<option value="">Seleccione</option>${opcionesLotes(lote => {
-        if (!origen) return true;
-        return Number(lote.existencias_jurisdicciones?.[origen] ?? lote.existencia_jurisdiccional ?? lote.existencia ?? 0) > 0;
-    })}`;
+
+    if (!origen) {
+        selector.innerHTML = `<option value="">Seleccione primero la jurisdicción origen</option>`;
+        selector.disabled = true;
+        actualizarEquivalenciaMovimiento();
+        return;
+    }
+
+    selector.disabled = true;
+    selector.innerHTML = `<option value="">Cargando insumos...</option>`;
+
+    try {
+        const respuesta = await consultarInventario(obtenerToken(), {
+            jurisdiccion: origen,
+            busqueda: "",
+            solo_disponible: true,
+            limite: 5000,
+            offset: 0
+        });
+
+        const inventarioOrigen = arreglo(respuesta.inventario)
+            .filter(item => Number(item.existencia ?? 0) > 0);
+
+        selector.innerHTML = inventarioOrigen.length
+            ? `<option value="">Seleccione</option>${inventarioOrigen.map(item => {
+                const loteId = item.lote_id || item.id;
+                const loteCatalogo = ESTADO.catalogos.lotes.find(lote => lote.id === loteId);
+                const producto = item.producto || loteCatalogo?.producto || "Insumo";
+                const lote = item.lote || loteCatalogo?.lote || "Sin lote";
+                const presentacion = item.presentacion || loteCatalogo?.presentacion || "Sin presentación";
+                const unidadBase = item.unidad_base || item.unidad_medida || loteCatalogo?.unidad_base || loteCatalogo?.unidad_medida || "";
+                const existencia = Number(item.existencia ?? 0);
+
+                return `<option value="${escapar(loteId)}">${escapar(`${producto} · ${lote} · ${presentacion} · Disponible: ${numero(existencia)} ${unidadBase}`)}</option>`;
+            }).join("")}`
+            : `<option value="">La jurisdicción no tiene insumos disponibles</option>`;
+
+        selector.disabled = inventarioOrigen.length === 0;
+    } catch (error) {
+        selector.innerHTML = `<option value="">No fue posible cargar los insumos</option>`;
+        selector.disabled = true;
+        mostrarMensaje("movement-message", error.message);
+    }
+
+    actualizarEquivalenciaMovimiento();
 }
 
 async function procesarMovimiento(evento) {
