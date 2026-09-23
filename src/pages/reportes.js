@@ -27,6 +27,10 @@ import {
     navegar
 } from "../utils/router.js";
 
+import {
+    puedeConsultarEstado
+} from "../utils/permisos.js";
+
 
 const ESTADO = {
     cargando: false,
@@ -155,6 +159,7 @@ async function cargarCatalogos() {
 
 function prepararFiltrosUsuario() {
     if (
+        puedeConsultarEstado(ESTADO.catalogos.usuario) &&
         puedeConsultarReportesEstatales(
             ESTADO.catalogos
         )
@@ -250,6 +255,7 @@ FORMULARIO DE FILTROS
 
 function crearFormularioFiltros() {
     const supervisor =
+        puedeConsultarEstado(ESTADO.catalogos.usuario) &&
         puedeConsultarReportesEstatales(
             ESTADO.catalogos
         );

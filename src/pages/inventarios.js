@@ -11,6 +11,11 @@ import {
 } from "../services/inventarios.service.js";
 import { obtenerCookie } from "../utils/cookies.js";
 import { navegar } from "../utils/router.js";
+import {
+    puedeAdministrarInventario,
+    puedeRegistrarMovimientoInventario,
+    puedeConsultarEstado
+} from "../utils/permisos.js";
 
 const UNIDADES = ["MG", "G", "KG", "ML", "L", "PIEZA", "DOSIS", "TABLETA", "AMPOLLETA"];
 
@@ -27,6 +32,7 @@ const ESTADO = {
     pestaña: "existencias",
     cargando: false,
     ambito: null,
+    usuario: {},
     catalogos: {
         puede_administrar: false,
         jurisdiccion_usuario: null,
@@ -68,9 +74,11 @@ export async function mostrarInventarios(opciones = {}) {
 
     try {
         await cargarCatalogos();
-        ESTADO.ambito = ESTADO.catalogos.puede_administrar
-            ? "TODO_ESTADO"
-            : ESTADO.catalogos.jurisdiccion_usuario;
+        ESTADO.ambito =
+            ESTADO.catalogos.puede_administrar &&
+            puedeConsultarEstado(ESTADO.usuario)
+                ? "TODO_ESTADO"
+                : ESTADO.catalogos.jurisdiccion_usuario;
         renderizarPagina();
         await cargarTodo();
     } catch (error) {
@@ -80,8 +88,15 @@ export async function mostrarInventarios(opciones = {}) {
 
 async function cargarCatalogos() {
     const respuesta = await obtenerCatalogosInventario(obtenerToken());
+    ESTADO.usuario =
+        respuesta?.usuario ||
+        respuesta?.contexto ||
+        {};
+
     ESTADO.catalogos = {
-        puede_administrar: Boolean(respuesta.puede_administrar),
+        puede_administrar:
+            Boolean(respuesta.puede_administrar) &&
+            puedeAdministrarInventario(ESTADO.usuario),
         jurisdiccion_usuario: respuesta.jurisdiccion_usuario || null,
         productos: arreglo(respuesta.productos),
         presentaciones: arreglo(respuesta.presentaciones),
@@ -105,7 +120,9 @@ function renderizarPagina() {
                         <button id="btn-producto" class="button button--secondary" type="button">Registrar insumo</button>
                         <button id="btn-presentacion" class="button button--secondary" type="button">Registrar presentación</button>
                     ` : ""}
-                    <button id="btn-movimiento" class="button button--primary" type="button">Registrar movimiento</button>
+                    ${puedeRegistrarMovimientoInventario(ESTADO.usuario) ? `
+                        <button id="btn-movimiento" class="button button--primary" type="button">Registrar movimiento</button>
+                    ` : ""}
                     <button id="btn-volver" class="button button--secondary" type="button">Volver</button>
                 </div>
             </header>
@@ -125,7 +142,7 @@ function renderizarPagina() {
     document.getElementById("btn-volver").onclick = () => navegar("/inicio");
     document.getElementById("btn-producto")?.addEventListener("click", mostrarFormularioProducto);
     document.getElementById("btn-presentacion")?.addEventListener("click", mostrarFormularioPresentacion);
-    document.getElementById("btn-movimiento").onclick = mostrarFormularioMovimiento;
+    document.getElementById("btn-movimiento")?.addEventListener("click", mostrarFormularioMovimiento);
     document.getElementById("inventory-scope-select")?.addEventListener("change", async evento => {
         ESTADO.ambito = evento.target.value;
         ESTADO.inventario.offset = 0;
@@ -261,11 +278,11 @@ function crearTablaInventario() {
 function renderizarMovimientos() {
     document.getElementById("inventory-content").innerHTML = `
         <section class="inventory-panel">
-            <header class="inventory-panel__header"><div><h2>Movimientos</h2><p>${ESTADO.movimientos.total} movimiento(s) encontrado(s).</p></div><button id="btn-movement-tab" class="button button--primary" type="button">Registrar movimiento</button></header>
+            <header class="inventory-panel__header"><div><h2>Movimientos</h2><p>${ESTADO.movimientos.total} movimiento(s) encontrado(s).</p></div>${puedeRegistrarMovimientoInventario(ESTADO.usuario) ? `<button id="btn-movement-tab" class="button button--primary" type="button">Registrar movimiento</button>` : ""}</header>
             <div class="inventory-table-wrapper">${crearTablaMovimientos()}</div>
         </section>
     `;
-    document.getElementById("btn-movement-tab").onclick = mostrarFormularioMovimiento;
+    document.getElementById("btn-movement-tab")?.addEventListener("click", mostrarFormularioMovimiento);
 }
 
 function crearTablaMovimientos() {
@@ -324,6 +341,11 @@ function opcionesLotes(filtro = () => true) {
 }
 
 function mostrarFormularioProducto() {
+    if (!puedeAdministrarInventario(ESTADO.usuario)) {
+        window.alert("Su perfil no tiene permisos para administrar el catálogo de inventario.");
+        return;
+    }
+
     abrirModal(`
         ${encabezadoModal("Catálogo de insumos", "Registrar insumo")}
         <form id="form-producto" class="modal-body modal-body--full">
@@ -361,6 +383,11 @@ function mostrarFormularioProducto() {
 }
 
 function mostrarFormularioPresentacion() {
+    if (!puedeAdministrarInventario(ESTADO.usuario)) {
+        window.alert("Su perfil no tiene permisos para administrar el catálogo de inventario.");
+        return;
+    }
+
     abrirModal(`
         ${encabezadoModal("Catálogo de presentaciones", "Registrar presentación")}
         <form id="form-presentation" class="modal-body modal-body--full">
@@ -396,6 +423,11 @@ function mostrarFormularioPresentacion() {
 }
 
 function mostrarFormularioMovimiento() {
+    if (!puedeRegistrarMovimientoInventario(ESTADO.usuario)) {
+        window.alert("Su perfil tiene permisos únicamente de consulta.");
+        return;
+    }
+
     const operacionesSupervisor = `
         <option value="RECEPCION">Recepción al almacén estatal</option>
         <option value="RECEPCION_DISTRIBUCION">Recepción y distribución directa</option>
@@ -663,6 +695,13 @@ async function actualizarLotesPorOrigen() {
 
 async function procesarMovimiento(evento) {
     evento.preventDefault();
+
+    if (!puedeRegistrarMovimientoInventario(ESTADO.usuario)) {
+        window.alert("Su perfil tiene permisos únicamente de consulta.");
+        cerrarModal();
+        return;
+    }
+
     const operacion = valor("movement-operation");
 
     try {

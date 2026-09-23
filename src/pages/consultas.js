@@ -24,8 +24,13 @@ import {
     navegar
 } from "../utils/router.js";
 
+import {
+    puedeRegistrarOperativos,
+    esSoloLectura
+} from "../utils/permisos.js";
 
 const ESTADO = {
+    usuario: {},
     pestaña: "casos",
 
     cargando: false,
@@ -106,6 +111,7 @@ function reiniciarEstado() {
     ESTADO.pestaña = "casos";
     ESTADO.cargando = false;
     ESTADO.detalleOperativo = null;
+    ESTADO.usuario = {};    
 
     ESTADO.casos = {
         registros: [],
@@ -146,6 +152,9 @@ async function cargarCatalogos() {
         obtenerToken()
     );
 
+    ESTADO.usuario =
+        respuesta.usuario || {};
+
     ESTADO.catalogos = {
         programas: obtenerArreglo(
             respuesta.programas
@@ -161,7 +170,11 @@ async function cargarCatalogos() {
     };
 }
 
-
+function puedeModificarDesdeConsultas() {
+    return !esSoloLectura(
+        ESTADO.usuario
+    );
+}
 /*
 ==========================================================
 ESTRUCTURA PRINCIPAL
@@ -188,14 +201,19 @@ function renderizarPagina() {
                     </p>
                 </div>
 
-                <div class="query-header__actions">
-                    <button
-                        id="btn-nuevo-operativo-consultas"
-                        class="button button--primary"
-                        type="button"
-                    >
-                        Registrar operativo
-                    </button>
+                ${
+    puedeRegistrarOperativos(ESTADO.usuario)
+        ? `
+            <button
+                id="btn-nuevo-operativo-consultas"
+                class="button button--primary"
+                type="button"
+            >
+                Registrar operativo
+            </button>
+        `
+        : ""
+}
 
                     <button
                         id="btn-inicio-consultas"
@@ -284,13 +302,13 @@ function registrarEventosPagina() {
         );
 
     document
-        .getElementById(
-            "btn-nuevo-operativo-consultas"
-        )
-        .addEventListener(
-            "click",
-            () => navegar("/operativos/nuevo")
-        );
+    .getElementById(
+        "btn-nuevo-operativo-consultas"
+    )
+    ?.addEventListener(
+        "click",
+        () => navegar("/operativos/nuevo")
+    );
 
     document
         .querySelectorAll("[data-query-tab]")
@@ -2473,8 +2491,8 @@ function crearTarjetaVerificacion(
                 </button>
 
                 ${
-                    verificacion.estatus ===
-                    "PROGRAMADA"
+                        puedeModificarDesdeConsultas() &&
+                        verificacion.estatus === "PROGRAMADA"
                         ? `
                             <button
                                 class="button button--primary"
@@ -2490,8 +2508,8 @@ function crearTarjetaVerificacion(
                 }
 
                 ${
-                    verificacion.estatus ===
-                    "EN_PROCESO"
+                    puedeModificarDesdeConsultas() &&
+    verificacion.estatus === "EN_PROCESO"
                         ? `
                             <button
                                 class="button button--primary"
@@ -2507,8 +2525,8 @@ function crearTarjetaVerificacion(
                 }
 
                 ${
-                    verificacion.clasificacion ===
-                    "CONFIRMADO"
+                    puedeModificarDesdeConsultas() &&
+verificacion.clasificacion === "CONFIRMADO"
                         ? `
                             <button
                                 class="button button--secondary"
@@ -2630,6 +2648,13 @@ function registrarEventosVerificaciones() {
 async function procesarIniciarVerificacion(
     verificacionId
 ) {
+    if (!puedeModificarDesdeConsultas()) {
+        window.alert(
+            "Su perfil tiene permisos únicamente de consulta."
+        );
+        return;
+    }
+
     const confirmado = window.confirm(
         "¿Desea iniciar esta verificación?"
     );
@@ -2775,6 +2800,12 @@ async function procesarVerificacionAdicional(
     evento
 ) {
     evento.preventDefault();
+     if (!puedeModificarDesdeConsultas()) {
+        window.alert(
+            "Su perfil tiene permisos únicamente de consulta."
+        );
+        return;
+    }
 
     const boton = evento.submitter;
 

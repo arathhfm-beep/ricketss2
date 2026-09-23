@@ -355,6 +355,11 @@ export async function obtenerInventarioOperativo(
         inventario:
             obtenerArreglo(
                 respuesta.inventario
+            ),
+
+        insecticidas:
+            obtenerArreglo(
+                respuesta.insecticidas
             )
     };
 }

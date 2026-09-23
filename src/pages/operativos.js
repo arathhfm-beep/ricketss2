@@ -22,6 +22,7 @@ import {
 
 import { obtenerCookie } from "../utils/cookies.js";
 import { navegar } from "../utils/router.js";
+import { puedeRegistrarOperativos } from "../utils/permisos.js";
 
 
 const MODOS = Object.freeze({
@@ -52,6 +53,7 @@ const ESTADO = {
     catalogos: null,
     usuario: crearUsuarioInicial(),
     inventario: [],
+    insecticidas: [],
     casoSeleccionado: null,
     operativoSeleccionado: null,
     editandoJornada: false,
@@ -73,6 +75,11 @@ export async function mostrarRegistrarOperativo(opciones = {}) {
     try {
         await cargarCatalogosOperativo();
 
+        if (!puedeRegistrarOperativos(ESTADO.usuario)) {
+            renderizarAccesoSoloConsulta();
+            return;
+        }
+
         if (opciones.operativoId) {
             ESTADO.modoRegistro = MODOS.RETOMAR;
             await seleccionarOperativoRetomar(opciones.operativoId);
@@ -84,6 +91,39 @@ export async function mostrarRegistrarOperativo(opciones = {}) {
         renderizarErrorOperativo(error);
     }
 }
+
+function renderizarAccesoSoloConsulta() {
+    const app = obtenerApp();
+
+    app.innerHTML = `
+        <main class="system-error">
+            <section class="system-error__card">
+                <h1>Acceso de consulta</h1>
+
+                <p>
+                    Su perfil puede consultar información,
+                    pero no registrar ni modificar operativos.
+                </p>
+
+                <button
+                    id="btn-operativo-solo-consulta"
+                    class="button button--primary"
+                    type="button"
+                >
+                    Ir a consultas
+                </button>
+            </section>
+        </main>
+    `;
+
+    document
+        .getElementById("btn-operativo-solo-consulta")
+        ?.addEventListener(
+            "click",
+            () => navegar("/consultas")
+        );
+}
+
 
 function crearUsuarioInicial() {
     return {
@@ -274,6 +314,7 @@ function reiniciarEstado() {
     ESTADO.catalogos = null;
     ESTADO.usuario = crearUsuarioInicial();
     ESTADO.inventario = [];
+    ESTADO.insecticidas = [];
     ESTADO.casoSeleccionado = null;
     ESTADO.operativoSeleccionado = null;
     ESTADO.tiposJornada = [];
@@ -1716,10 +1757,47 @@ function actividadPermiteInsumos(tipoActividadId) {
         codigo.includes("TRATAMIENTO") ||
         codigo.includes("ROCI") ||
         codigo.includes("INSECTICIDA") ||
-        codigo.includes("VACUN")
+        codigo.includes("VACUN") ||
+        codigo.includes("ESTERIL")
+    );
+}
+function esActividadRociado(actividad) {
+    const codigo = String(
+        obtenerCodigoTipoActividad(
+            actividad?.tipo_actividad_id
+        ) || ""
+    )
+        .trim()
+        .toUpperCase();
+
+    return (
+        codigo.includes("ROCI") ||
+        codigo.includes("INSECTICIDA")
     );
 }
 
+
+function obtenerInsumosDisponiblesActividad(
+    actividad
+) {
+    if (esActividadRociado(actividad)) {
+        return ESTADO.insecticidas;
+    }
+
+    return ESTADO.inventario;
+}
+
+
+function obtenerLoteActividad(
+    actividad,
+    loteId
+) {
+    return obtenerInsumosDisponiblesActividad(
+        actividad
+    ).find(
+        item => item.lote_id === loteId
+    ) || null;
+}
 function crearFormularioInsumos(
     actividad,
     indiceSector,
@@ -1770,7 +1848,8 @@ function crearFormularioInsumos(
                                     indiceInsumo
                                 ) => {
                                     const lote =
-                                        obtenerLoteInventario(
+                                        obtenerLoteActividad(
+                                            actividad,
                                             insumo.lote_id
                                         );
 
@@ -1849,7 +1928,7 @@ function crearFormularioInsumos(
                                                         Seleccione
                                                     </option>
 
-                                                    ${ESTADO.inventario
+                                                   ${obtenerInsumosDisponiblesActividad(actividad)
                                                         .map(
                                                             item => `
                                                                 <option
@@ -2448,9 +2527,15 @@ function registrarEventosActividades() {
                 insumo[campo] = normalizarTexto(elemento.value);
             }
 
-           if (campo === "lote_id") {
+          if (campo === "lote_id") {
+    const actividad =
+        obtenerActividadPorElemento(
+            elemento
+        );
+
     const lote =
-        obtenerLoteInventario(
+        obtenerLoteActividad(
+            actividad,
             insumo.lote_id
         );
 
@@ -2470,15 +2555,12 @@ function registrarEventosActividades() {
         );
 
     insumo.existencia_disponible =
-        obtenerExistenciaLote(
-            lote
-        );
+        esActividadRociado(actividad)
+            ? null
+            : obtenerExistenciaLote(
+                lote
+            );
 
-    /*
-     * Al cambiar de lote se inicia en unidad base.
-     * El usuario todavía puede cambiar después
-     * a PRESENTACION desde el selector.
-     */
     insumo.tipo_captura =
         "UNIDAD_BASE";
 
@@ -3523,7 +3605,8 @@ function validarActividades() {
                     }
 
                     const lote =
-                        obtenerLoteInventario(
+                        obtenerLoteActividad(
+                            actividad,
                             insumo.lote_id
                         );
                       
@@ -3539,8 +3622,17 @@ function validarActividades() {
                             obtenerContenidoPresentacion(lote)
                         );
 
+                    const rociado =
+                        esActividadRociado(
+                            actividad
+                        );
+
                     const existencia =
-                        obtenerExistenciaLote(lote);
+                        rociado
+                            ? null
+                            : obtenerExistenciaLote(
+                                lote
+                            );
 
                     const cantidadCapturada =
                         decimalSeguro(
@@ -3608,6 +3700,7 @@ function validarActividades() {
                         );
 
                     if (
+                        !rociado &&
                         insumo.cantidad >
                         existencia
                     ) {
@@ -3681,6 +3774,14 @@ function validarActividades() {
 }
 
 async function guardarNuevoOperativo() {
+    if (!puedeRegistrarOperativos(ESTADO.usuario)) {
+        mostrarMensajeGlobal(
+            "Su perfil tiene permisos únicamente de consulta.",
+            true
+        );
+        return;
+    }
+
     aplicarJurisdiccionUsuario();
     if (ESTADO.guardando) {
         return;
@@ -4871,6 +4972,14 @@ function renderizarEditorJornadaRetomada() {
 }
 
 async function guardarJornadaRetomada() {
+    if (!puedeRegistrarOperativos(ESTADO.usuario)) {
+        mostrarMensajeGlobal(
+            "Su perfil tiene permisos únicamente de consulta.",
+            true
+        );
+        return;
+    }
+
     if (ESTADO.guardando) {
         return;
     }
@@ -4979,18 +5088,35 @@ async function cargarInventario() {
 
     if (!ESTADO.operativo.cve_jur_res) {
         ESTADO.inventario = [];
+        ESTADO.insecticidas = [];
         return;
     }
 
     try {
-        const respuesta = await obtenerInventarioOperativo(
-            obtenerToken(),
-            ESTADO.operativo.cve_jur_res
+        const respuesta =
+            await obtenerInventarioOperativo(
+                obtenerToken(),
+                ESTADO.operativo.cve_jur_res
+            );
+
+        ESTADO.inventario =
+            obtenerArreglo(
+                respuesta?.inventario
+            );
+
+        ESTADO.insecticidas =
+            obtenerArreglo(
+                respuesta?.insecticidas
+            );
+
+    } catch (error) {
+        console.error(
+            "[Operativos] Error al cargar inventario:",
+            error
         );
-        ESTADO.inventario = obtenerArreglo(respuesta?.inventario || respuesta?.resultados || respuesta);
-       
-    } catch {
+
         ESTADO.inventario = [];
+        ESTADO.insecticidas = [];
     }
 }
 

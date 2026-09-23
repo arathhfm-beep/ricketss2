@@ -31,11 +31,17 @@ import {
     navegar
 } from "../utils/router.js";
 
+import {
+    puedeConsultarEstado
+} from "../utils/permisos.js";
+
 
 const ESTADO = {
     cargando: false,
 
     respuesta: null,
+
+    usuario: {},
 
     jurisdicciones: [],
 
@@ -74,6 +80,7 @@ export async function mostrarIndicadores() {
 function reiniciarEstado() {
     ESTADO.cargando = false;
     ESTADO.respuesta = null;
+    ESTADO.usuario = {};
     ESTADO.jurisdicciones = [];
 
     ESTADO.filtros = {
@@ -103,6 +110,11 @@ async function cargarCatalogos() {
         await obtenerCatalogosOperativo(
             token
         );
+
+    ESTADO.usuario =
+        respuesta?.usuario ||
+        respuesta?.contexto ||
+        {};
 
     ESTADO.jurisdicciones =
         obtenerArreglo(
@@ -142,6 +154,7 @@ async function cargarIndicadores() {
 
 function ajustarJurisdiccionUsuario() {
     if (
+        puedeConsultarEstado(ESTADO.usuario) &&
         puedeConsultarTodo(
             ESTADO.respuesta
         )
@@ -279,6 +292,7 @@ FILTROS
 
 function crearFiltros() {
     const supervisor =
+        puedeConsultarEstado(ESTADO.usuario) &&
         puedeConsultarTodo(
             ESTADO.respuesta
         );

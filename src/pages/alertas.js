@@ -30,11 +30,18 @@ import {
     navegar
 } from "../utils/router.js";
 
+import {
+    puedeAtenderAlertas,
+    puedeConsultarEstado
+} from "../utils/permisos.js";
+
 
 const ESTADO = {
     cargando: false,
 
     respuesta: null,
+
+    usuario: {},
 
     jurisdicciones: [],
 
@@ -81,6 +88,7 @@ export async function mostrarAlertas() {
 function reiniciarEstado() {
     ESTADO.cargando = false;
     ESTADO.respuesta = null;
+    ESTADO.usuario = {};
     ESTADO.tipos = [];
     ESTADO.alertas = [];
     ESTADO.resumen = {};
@@ -103,6 +111,11 @@ async function cargarCatalogos() {
         await obtenerCatalogosOperativo(
             obtenerToken()
         );
+
+    ESTADO.usuario =
+        respuesta?.usuario ||
+        respuesta?.contexto ||
+        {};
 
     ESTADO.jurisdicciones =
         obtenerArreglo(
@@ -183,6 +196,7 @@ async function cargarAlertas() {
 
 function ajustarJurisdiccionUsuario() {
     if (
+        puedeConsultarEstado(ESTADO.usuario) &&
         puedeConsultarAlertasEstatales(
             ESTADO.respuesta
         )
@@ -408,6 +422,7 @@ FILTROS
 
 function crearFiltros() {
     const supervisor =
+        puedeConsultarEstado(ESTADO.usuario) &&
         puedeConsultarAlertasEstatales(
             ESTADO.respuesta
         );
@@ -1075,6 +1090,7 @@ function crearAccionesAlerta(alerta) {
     }
 
     if (
+        puedeAtenderAlertas(ESTADO.usuario) &&
         puedeAtenderAlerta(
             alerta
         )
@@ -1470,6 +1486,11 @@ ATENDER ALERTA
 function mostrarFormularioAtencion(
     alertaId
 ) {
+    if (!puedeAtenderAlertas(ESTADO.usuario)) {
+        window.alert("Su perfil tiene permisos únicamente de consulta.");
+        return;
+    }
+
     const alerta =
         ESTADO.alertas.find(
             item =>
@@ -1588,6 +1609,12 @@ async function procesarAtencionAlerta(
     evento
 ) {
     evento.preventDefault();
+
+    if (!puedeAtenderAlertas(ESTADO.usuario)) {
+        window.alert("Su perfil tiene permisos únicamente de consulta.");
+        cerrarModal();
+        return;
+    }
 
     const boton =
         document.getElementById(

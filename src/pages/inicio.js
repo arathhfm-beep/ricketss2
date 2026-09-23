@@ -11,6 +11,9 @@ import {
 
 import { navegar } from "../utils/router.js";
 
+import {
+    puedeRegistrarOperativos
+} from "../utils/permisos.js";
 
 const ICONOS = Object.freeze({
     clipboard: `
@@ -81,9 +84,19 @@ function renderizarInicio(datos) {
 
     const usuario = datos.usuario || {};
     const resumen = datos.resumen || {};
-    const acciones = Array.isArray(datos.acciones)
-        ? datos.acciones.filter(accion => accion.visible)
-        : [];
+
+    const accionesOriginales =
+        Array.isArray(datos.acciones)
+            ? datos.acciones.filter(
+                accion => accion.visible
+            )
+            : [];
+
+    const acciones =
+        filtrarAccionesPorPermisos(
+            accionesOriginales,
+            usuario
+        );
 
     app.innerHTML = `
         <div class="app-shell">
@@ -153,6 +166,33 @@ function renderizarInicio(datos) {
     registrarEventosInicio();
 }
 
+function filtrarAccionesPorPermisos(
+    acciones,
+    usuario
+) {
+    return acciones.filter(accion => {
+
+        const ruta = String(
+            accion?.ruta || ""
+        )
+            .trim()
+            .toLowerCase();
+
+        /*
+        El usuario sin permiso de captura
+        no debe recibir accesos rápidos
+        para registrar operativos.
+        */
+        if (
+            ruta.startsWith("/operativos") &&
+            !puedeRegistrarOperativos(usuario)
+        ) {
+            return false;
+        }
+
+        return true;
+    });
+}
 
 function crearBarraSuperior(usuario) {
     const nombre = escaparHTML(
@@ -222,6 +262,9 @@ function crearSidebar(usuario) {
         "Estatal"
     );
 
+    const puedeCapturar =
+        puedeRegistrarOperativos(usuario);
+
     return `
         <div class="sidebar-profile">
             <div class="sidebar-profile__avatar">
@@ -235,6 +278,7 @@ function crearSidebar(usuario) {
         </div>
 
         <nav class="sidebar-nav">
+
             ${crearEnlaceSidebar(
                 "/inicio",
                 "Inicio",
@@ -242,11 +286,15 @@ function crearSidebar(usuario) {
                 true
             )}
 
-            ${crearEnlaceSidebar(
-                "/operativos/nuevo",
-                "Registrar operativo",
-                "clipboard"
-            )}
+            ${
+                puedeCapturar
+                    ? crearEnlaceSidebar(
+                        "/operativos/nuevo",
+                        "Registrar operativo",
+                        "clipboard"
+                    )
+                    : ""
+            }
 
             ${crearEnlaceSidebar(
                 "/consultas",
@@ -277,6 +325,7 @@ function crearSidebar(usuario) {
                 "Reportes",
                 "report"
             )}
+
         </nav>
 
         <div class="sidebar-footer">
