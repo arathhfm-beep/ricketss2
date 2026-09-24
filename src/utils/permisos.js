@@ -130,10 +130,12 @@ export function normalizarRol(usuario = {}) {
 
 
     if (
-        rol.includes("ADMINISTRATIVO")
-    ) {
-        return ROLES.ADMINISTRATIVO;
-    }
+    rol === "ADMIN" ||
+    rol === "ADMINISTRADOR" ||
+    rol.includes("ADMINISTRATIVO")
+) {
+    return ROLES.ADMINISTRATIVO;
+}
 
 
     if (

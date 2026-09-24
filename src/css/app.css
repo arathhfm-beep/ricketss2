@@ -1615,7 +1615,6 @@ MÓDULO DE CONSULTAS
 */
 
 .query-page {
-    min-height: 100vh;
     background: var(--color-background);
 }
 
@@ -1722,7 +1721,6 @@ CONTENIDO
 */
 
 .query-content {
-    min-height: 400px;
     margin-top: 18px;
 }
 

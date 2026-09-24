@@ -156,12 +156,9 @@ function normalizarRolUsuario(usuario = {}) {
 }
 
 function esRolSupervisor(rol) {
-    const codigo = String(rol || "").toUpperCase();
-    return (
-        codigo === "ADMIN" ||
-        codigo.includes("SUPERVISOR") ||
-        codigo.includes("ADMINISTRADOR")
-    );
+   const codigo = String(rol || "").toUpperCase();
+
+    return codigo.includes("SUPERVISOR");
 }
 
 function esUsuarioJurisdiccional() {
@@ -344,7 +341,11 @@ async function cargarCatalogosOperativo() {
         {};
 
     const rol = normalizarRolUsuario(usuario);
-
+    console.log("[PERMISOS OPERATIVOS]", {
+    respuestaCompleta: respuesta,
+    usuarioBackend: usuario,
+    rolNormalizado: rol
+});
     ESTADO.usuario = {
         rol: rol || null,
         cve_jur_res:
