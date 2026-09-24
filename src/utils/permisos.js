@@ -115,13 +115,6 @@ export function normalizarRol(usuario = {}) {
     Compatibilidad temporal con nombres anteriores.
     */
 
-    if (
-        rol === "ADMIN" ||
-        rol === "ADMINISTRADOR"
-    ) {
-        return ROLES.SUPERVISOR;
-    }
-
 
     if (rol.includes("SUPERVISOR")) {
         return ROLES.SUPERVISOR;
