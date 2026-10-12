@@ -88,15 +88,14 @@ export async function mostrarInventarios(opciones = {}) {
 
 async function cargarCatalogos() {
     const respuesta = await obtenerCatalogosInventario(obtenerToken());
+
     ESTADO.usuario =
         respuesta?.usuario ||
         respuesta?.contexto ||
         {};
 
     ESTADO.catalogos = {
-        puede_administrar:
-            Boolean(respuesta.puede_administrar) &&
-            puedeAdministrarInventario(ESTADO.usuario),
+        puede_administrar: respuesta.puede_administrar === true,
         jurisdiccion_usuario: respuesta.jurisdiccion_usuario || null,
         productos: arreglo(respuesta.productos),
         presentaciones: arreglo(respuesta.presentaciones),
@@ -120,7 +119,8 @@ function renderizarPagina() {
                         <button id="btn-producto" class="button button--secondary" type="button">Registrar insumo</button>
                         <button id="btn-presentacion" class="button button--secondary" type="button">Registrar presentación</button>
                     ` : ""}
-                    ${puedeRegistrarMovimientoInventario(ESTADO.usuario) ? `
+                    ${ESTADO.catalogos.puede_administrar ||
+  puedeRegistrarMovimientoInventario(ESTADO.usuario) ? `
                         <button id="btn-movimiento" class="button button--primary" type="button">Registrar movimiento</button>
                     ` : ""}
                     <button id="btn-volver" class="button button--secondary" type="button">Volver</button>
@@ -341,7 +341,7 @@ function opcionesLotes(filtro = () => true) {
 }
 
 function mostrarFormularioProducto() {
-    if (!puedeAdministrarInventario(ESTADO.usuario)) {
+    if (!ESTADO.catalogos.puede_administrar) {
         window.alert("Su perfil no tiene permisos para administrar el catálogo de inventario.");
         return;
     }
@@ -383,7 +383,7 @@ function mostrarFormularioProducto() {
 }
 
 function mostrarFormularioPresentacion() {
-    if (!puedeAdministrarInventario(ESTADO.usuario)) {
+    if (!ESTADO.catalogos.puede_administrar) {
         window.alert("Su perfil no tiene permisos para administrar el catálogo de inventario.");
         return;
     }
@@ -423,7 +423,10 @@ function mostrarFormularioPresentacion() {
 }
 
 function mostrarFormularioMovimiento() {
-    if (!puedeRegistrarMovimientoInventario(ESTADO.usuario)) {
+    if (
+    !ESTADO.catalogos.puede_administrar &&
+    !puedeRegistrarMovimientoInventario(ESTADO.usuario)
+) {
         window.alert("Su perfil tiene permisos únicamente de consulta.");
         return;
     }
@@ -696,7 +699,10 @@ async function actualizarLotesPorOrigen() {
 async function procesarMovimiento(evento) {
     evento.preventDefault();
 
-    if (!puedeRegistrarMovimientoInventario(ESTADO.usuario)) {
+    if (
+    !ESTADO.catalogos.puede_administrar &&
+    !puedeRegistrarMovimientoInventario(ESTADO.usuario)
+) {
         window.alert("Su perfil tiene permisos únicamente de consulta.");
         cerrarModal();
         return;
