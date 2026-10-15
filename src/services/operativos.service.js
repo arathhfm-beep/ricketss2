@@ -932,6 +932,7 @@ function construirResumenManzana(
         );
 
     const resultado = {
+        lotes_baldios: normalizarEntero(datos.lotes_baldios),
         viviendas_visitadas:
             normalizarEntero(
                 datos.viviendas_visitadas
@@ -966,6 +967,9 @@ function construirResumenManzana(
             normalizarEntero(
                 datos.habitantes_beneficiados
             ),
+
+        viviendas_con_animales:
+            normalizarEntero(datos.viviendas_con_animales),
 
         viviendas_con_perros:
             normalizarEntero(
@@ -1123,6 +1127,14 @@ function construirActividadManzana(
                 datos.gatos_inspeccionados
             ),
 
+        perros_con_pulgas: normalizarEntero(datos.perros_con_pulgas),
+        gatos_con_pulgas: normalizarEntero(datos.gatos_con_pulgas),
+        viviendas_con_perros: normalizarEntero(datos.viviendas_con_perros),
+        viviendas_con_gatos: normalizarEntero(datos.viviendas_con_gatos),
+        viviendas_con_perros_gatos: normalizarEntero(datos.viviendas_con_perros_gatos),
+        viviendas_sin_animales: normalizarEntero(datos.viviendas_sin_animales),
+        ejemplares_enviados: normalizarEntero(datos.ejemplares_enviados),
+        ejemplares_positivos: datos.ejemplares_positivos === null || datos.ejemplares_positivos === undefined || datos.ejemplares_positivos === "" ? null : normalizarEntero(datos.ejemplares_positivos),
         gatos_con_garrapata:
             normalizarEntero(
                 datos.gatos_con_garrapata

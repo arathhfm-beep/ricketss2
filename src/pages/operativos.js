@@ -245,6 +245,7 @@ function crearResumenManzanaInicial() {
         viviendas_con_perros: 0,
         viviendas_con_gatos: 0,
         viviendas_con_perros_gatos: 0,
+        viviendas_con_animales: 0,
         viviendas_sin_animales: 0,
         perros_censados: 0,
         gatos_censados: 0,
@@ -271,6 +272,14 @@ function crearActividadInicial() {
         perros_con_garrapata: 0,
         gatos_inspeccionados: 0,
         gatos_con_garrapata: 0,
+        gatos_con_pulgas: 0,
+        perros_con_pulgas: 0,
+        ejemplares_enviados: 0,
+        ejemplares_positivos: null,
+        viviendas_con_perros: 0,
+        viviendas_con_gatos: 0,
+        viviendas_con_perros_gatos: 0,
+        viviendas_sin_animales: 0,
         garrapatas_en_viviendas: 0,
         garrapatas_en_perros: 0,
         garrapatas_en_gatos: 0,
@@ -1079,53 +1088,72 @@ function crearTarjetaManzana(manzana, indiceSector, indiceManzana) {
     const resumen = manzana.resumen || crearResumenManzanaInicial();
 
     return `
-        <section class="accordion-card">
+        <section class="accordion-card" data-manzana-index="${indiceManzana}">
             <header class="accordion-card__header">
-                <div>
-                    <h3>Manzana ${escaparHTML(manzana.manzana || indiceManzana + 1)}</h3>
-                    <p>Resumen consolidado de la jornada.</p>
-                </div>
-                ${manzana.id ? `
-                    <span class="form-help">Manzana existente · no eliminable desde la aplicación</span>
-                ` : `
-                    <button
-                        class="button button--danger"
-                        type="button"
-                        data-eliminar-manzana="${indiceManzana}"
-                        data-sector-index="${indiceSector}"
-                    >Eliminar</button>
-                `}
+                <h4>Manzana ${escaparHTML(manzana.manzana || "sin clave")}</h4>
+                <button class="button button--danger" type="button" data-eliminar-manzana="${indiceManzana}" data-sector-index="${indiceSector}">Eliminar manzana</button>
             </header>
-
             <div class="accordion-card__body">
                 <div class="form-grid">
                     <div class="form-group">
                         <label>Clave de manzana</label>
-                        <input
-                            type="text"
-                            maxlength="50"
-                            value="${escaparHTML(manzana.manzana || "")}"
-                            data-manzana-campo="manzana"
-                            data-sector-index="${indiceSector}"
-                            data-manzana-index="${indiceManzana}"
-                        >
+                        <input type="text" maxlength="50" value="${escaparHTML(manzana.manzana || "")}" data-manzana-campo="manzana" data-sector-index="${indiceSector}" data-manzana-index="${indiceManzana}">
                     </div>
+<details open class="form-group--full"
+     role="note"
+     style="grid-column:1/-1;padding:18px 20px;background:#fff8e8;border:1px solid #d6a347;border-radius:14px;margin:12px 0 16px;color:#473718;">
+
+    <summary style="cursor:pointer;font-weight:700;margin-bottom:9px;">Indicaciones importantes para el resumen de manzana</summary>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;">
+        <span aria-hidden="true"
+              style="display:inline-flex;align-items:center;justify-content:center;width:29px;height:29px;border-radius:50%;background:#f3dc9d;color:#674700;font-weight:800;">!</span>
+
+        <strong style="font-size:1.04rem;">
+            Importante: ¿qué información debe registrar?
+        </strong>
+    </div>
+
+    <p style="margin:0 0 12px;line-height:1.55;">
+        Registre los datos de <strong>una sola actividad: la que tuvo mayor cobertura de viviendas</strong>
+        en esta manzana (Ectodesparasitación, Rociado o Entomología).
+        Utilice el levantamiento más completo para el resumen general.
+    </p>
+
+    <div style="padding:11px 14px;background:#fff;border:1px solid #ead8b4;border-radius:9px;line-height:1.6;">
+        <strong>Ejemplo:</strong>
+        Ectodesparasitación: <strong>7 viviendas</strong> ·
+        Rociado: <strong>6 viviendas</strong>.
+        <div style="color:#27643c;font-weight:650;margin-top:4px;">
+            ✓ Capture el resumen correspondiente a Ectodesparasitación.
+        </div>
+    </div>
+
+    <p style="margin:12px 0 0;line-height:1.5;">
+        <strong>Atención:</strong>
+        No sume viviendas de distintas actividades.
+        Las viviendas trabajadas, cerradas, deshabitadas, renuentes
+        y los lotes baldíos deben corresponder al mismo levantamiento.
+    </p>
+</details>
 
                     <div class="form-group">
-                        <label>Viviendas visitadas</label>
-                        <input type="number" min="0" step="1" value="${calcularViviendasVisitadas(resumen)}" readonly>
-                        <small>Trabajadas + cerradas + deshabitadas + renuentes.</small>
+                    <label>Viviendas visitadas</label>
+                                    <input type="number" min="0" step="1" value="${calcularViviendasVisitadas(resumen)}" readonly>
+                                    <small>Trabajadas + cerradas + deshabitadas + renuentes.</small>
                     </div>
                     ${crearCampoResumen("viviendas_trabajadas", "Viviendas trabajadas", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_cerradas", "Viviendas cerradas", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_deshabitadas", "Viviendas deshabitadas", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_renuentes", "Viviendas renuentes", resumen, indiceSector, indiceManzana)}
-                    
+                                ${crearCampoResumen("viviendas_cerradas", "Viviendas cerradas", resumen, indiceSector, indiceManzana)}
+                                ${crearCampoResumen("viviendas_deshabitadas", "Viviendas deshabitadas", resumen, indiceSector, indiceManzana)}
+                                ${crearCampoResumen("viviendas_renuentes", "Viviendas renuentes", resumen, indiceSector, indiceManzana)}
+                                ${crearCampoResumen("lotes_baldios", "Lotes baldíos", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("habitantes_beneficiados", "Habitantes beneficiados", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_con_perros", "Viviendas con perros", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_con_gatos", "Viviendas con gatos", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_con_perros_gatos", "Viviendas con perros y gatos", resumen, indiceSector, indiceManzana)}
-                    ${crearCampoResumen("viviendas_sin_animales", "Viviendas sin animales", resumen, indiceSector, indiceManzana)}
+                    ${crearCampoResumen(
+    "viviendas_con_animales",
+    "Viviendas con animales",
+    resumen,
+    indiceSector,
+    indiceManzana
+)}
                     ${crearCampoResumen("perros_censados", "Perros censados", resumen, indiceSector, indiceManzana)}
                     ${crearCampoResumen("gatos_censados", "Gatos censados", resumen, indiceSector, indiceManzana)}
 
@@ -1353,14 +1381,7 @@ function crearCamposSegunActividad(
     ) {
         return `
 
-            ${crearCampoActividadNumero(
-                "viviendas_encuestadas",
-                "Viviendas encuestadas",
-                actividad,
-                indiceSector,
-                indiceManzana,
-                indiceActividad
-            )}
+            ${[ ["viviendas_con_perros", "Viviendas solo con perros"], ["viviendas_con_gatos", "Viviendas solo con gatos"], ["viviendas_con_perros_gatos", "Viviendas con perros y gatos"], ["viviendas_sin_animales", "Viviendas sin animales"] ].map(([campo, etiqueta]) => crearCampoActividadNumero(campo, etiqueta, actividad, indiceSector, indiceManzana, indiceActividad)).join("")}
 
             ${crearCampoActividadNumero(
                 "viviendas_inspeccionadas",
@@ -1399,6 +1420,15 @@ function crearCamposSegunActividad(
             )}
 
             ${crearCampoActividadNumero(
+                "gatos_con_garrapata",
+                "Gatos con garrapata",
+                actividad,
+                indiceSector,
+                indiceManzana,
+                indiceActividad
+            )}
+
+            ${crearCampoActividadNumero(
                 "gatos_inspeccionados",
                 "Gatos inspeccionados",
                 actividad,
@@ -1407,9 +1437,11 @@ function crearCamposSegunActividad(
                 indiceActividad
             )}
 
+            ${crearCampoActividadNumero("perros_con_pulgas", "Perros con pulgas", actividad, indiceSector, indiceManzana, indiceActividad)}
+
             ${crearCampoActividadNumero(
-                "gatos_con_garrapata",
-                "Gatos con garrapata",
+                "gatos_con_pulgas",
+                "Gatos con pulgas",
                 actividad,
                 indiceSector,
                 indiceManzana,
@@ -1471,8 +1503,8 @@ function crearCamposSegunActividad(
             )}
 
             ${crearCampoActividadNumero(
-                "muestras_enviadas",
-                "Muestras enviadas (garrapatas)",
+                "ejemplares_enviados",
+                "Ejemplares enviados (pulgas y garrapatas)",
                 actividad,
                 indiceSector,
                 indiceManzana,
@@ -1480,8 +1512,8 @@ function crearCamposSegunActividad(
             )}
 
             ${crearCampoActividadNumeroNullable(
-                "garrapatas_positivas",
-                "Garrapatas positivas (resultado)",
+                "ejemplares_positivos",
+                "Ejemplares positivos (resultado)",
                 actividad,
                 indiceSector,
                 indiceManzana,
@@ -1507,7 +1539,7 @@ function crearCamposSegunActividad(
 
             ${crearCampoActividadNumero(
                 "viviendas_ectodesparasitadas",
-                "Viviendas ectodesparasitadas",
+                "Viviendas trabajadas con animales",
                 actividad,
                 indiceSector,
                 indiceManzana,
@@ -3574,15 +3606,8 @@ function validarResumenManzana(resumen, sector, manzana) {
     // Viviendas visitadas se deriva siempre del resultado de la visita.
     resumen.viviendas_visitadas = resultados;
 
-    const distribucionAnimales =
-        enteroSeguro(resumen.viviendas_con_perros) +
-        enteroSeguro(resumen.viviendas_con_gatos) +
-        enteroSeguro(resumen.viviendas_con_perros_gatos) +
-        enteroSeguro(resumen.viviendas_sin_animales);
-
-    if (distribucionAnimales > enteroSeguro(resumen.viviendas_trabajadas)) {
-        throw new Error(`En el sector ${sector}, manzana ${manzana}, la distribución por animales supera las viviendas trabajadas.`);
-    }
+    // La distribución de animales se captura por actividad de Entomología.
+    // El resumen general no debe bloquearse por indicadores de otra actividad.
 }
 function validarActividades() {
     let total = 0;
@@ -3732,11 +3757,11 @@ function validarActividades() {
                 ) {
                     const enviadas =
                         enteroSeguro(
-                            actividad.muestras_enviadas
+                            actividad.ejemplares_enviados
                         );
 
                     const positivas =
-                        actividad.garrapatas_positivas;
+                        actividad.ejemplares_positivos;
 
                     if (
                         positivas !== null &&
@@ -3745,7 +3770,7 @@ function validarActividades() {
                         enteroSeguro(positivas) > enviadas
                     ) {
                         throw new Error(
-                            `En la manzana ${manzana.manzana}, las garrapatas positivas no pueden superar las muestras enviadas.`
+                            `En la manzana ${manzana.manzana}, los ejemplares positivos no pueden superar los ejemplares enviados.`
                         );
                     }
                 }
@@ -4461,6 +4486,14 @@ function construirJornadaDesdeDetalle(
                                     actividadBD.gatos_inspeccionados
                                 ),
 
+                            perros_con_pulgas: enteroSeguro(actividadBD.perros_con_pulgas),
+                            gatos_con_pulgas: enteroSeguro(actividadBD.gatos_con_pulgas),
+                            ejemplares_enviados: enteroSeguro(actividadBD.ejemplares_enviados),
+                            ejemplares_positivos: actividadBD.ejemplares_positivos ?? null,
+                            viviendas_con_perros: enteroSeguro(actividadBD.viviendas_con_perros),
+                            viviendas_con_gatos: enteroSeguro(actividadBD.viviendas_con_gatos),
+                            viviendas_con_perros_gatos: enteroSeguro(actividadBD.viviendas_con_perros_gatos),
+                            viviendas_sin_animales: enteroSeguro(actividadBD.viviendas_sin_animales),
                             gatos_con_garrapata:
                                 enteroSeguro(
                                     actividadBD.gatos_con_garrapata
