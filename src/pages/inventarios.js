@@ -285,21 +285,65 @@ function renderizarMovimientos() {
     document.getElementById("btn-movement-tab")?.addEventListener("click", mostrarFormularioMovimiento);
 }
 
+function equivalenciaMovimiento(item) {
+    const lotes = ESTADO.catalogos.lotes;
+    const presentaciones = ESTADO.catalogos.presentaciones;
+    const lote = lotes.find(l => String(l.id) === String(item.lote_id)) ||
+        lotes.find(l => String(l.lote) === String(item.lote) &&
+            String(l.producto_id || l.producto) === String(item.producto_id || item.producto));
+    const presentacion = presentaciones.find(p =>
+        String(p.id || p.presentacion_id) === String(item.presentacion_id || lote?.presentacion_id)) ||
+        presentaciones.find(p =>
+            String(p.nombre || '').trim().toLowerCase() === String(item.presentacion || lote?.presentacion || '').trim().toLowerCase() &&
+            String(p.producto_id) === String(item.producto_id || lote?.producto_id));
+
+    const cantidadBase = Number(item.cantidad ?? item.cantidad_base);
+    const capturada = Number(item.cantidad_capturada);
+    const tipo = String(item.tipo_captura || '').toUpperCase();
+    const contenidoCatalogo = Number(item.contenido_presentacion ??
+        presentacion?.contenido ?? presentacion?.contenido_presentacion ?? lote?.contenido_presentacion);
+    const contenidoDeducido = tipo === 'PRESENTACION' &&
+        Number.isFinite(capturada) && capturada > 0 &&
+        Number.isFinite(cantidadBase) && cantidadBase > 0
+        ? cantidadBase / capturada : NaN;
+    const contenido = Number.isFinite(contenidoCatalogo) && contenidoCatalogo > 0
+        ? contenidoCatalogo : contenidoDeducido;
+    const nombre = item.presentacion || presentacion?.nombre || lote?.presentacion || 'presentación';
+    const unidad = item.unidad_base || presentacion?.unidad_medida || lote?.unidad_base || '';
+
+    if (!Number.isFinite(contenido) || contenido <= 0 || !Number.isFinite(cantidadBase)) {
+        return 'Sin datos suficientes para convertir a presentaciones';
+    }
+    const equivalentes = cantidadBase / contenido;
+    return `${numero(equivalentes)} presentaciones equivalentes · ${nombre} (1 = ${numero(contenido)} ${unidad})`;
+}
+
+function ubicacionMovimiento(tipo, id) {
+    const t = String(tipo || "").toUpperCase();
+    const clave = String(id ?? "");
+    if (t.includes("ESTATAL")) return "Almacén estatal";
+    if (t.includes("JUR")) {
+        const j = ESTADO.catalogos.jurisdicciones.find(x => String(x.id) === clave || String(x.clave) === clave || String(Number(x.clave)) === clave);
+        return j ? `JS ${j.clave} · ${j.nombre}` : `Jurisdicción ${clave || "no especificada"}`;
+    }
+    return [tipo, id].filter(Boolean).join(" · ") || "No especificado";
+}
+
 function crearTablaMovimientos() {
     if (!ESTADO.movimientos.registros.length) return `<div class="empty-state"><h3>Sin movimientos</h3></div>`;
 
     return `
         <table class="inventory-table inventory-table--movements">
-            <thead><tr><th>Fecha</th><th>Movimiento</th><th>Insumo / lote</th><th>Origen</th><th>Destino</th><th>Capturado</th><th>Base</th><th>Observaciones</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Movimiento</th><th>Insumo / lote</th><th>Origen</th><th>Destino</th><th>Capturado</th><th>Cantidad base y equivalencia</th><th>Observaciones</th></tr></thead>
             <tbody>${ESTADO.movimientos.registros.map(item => `
                 <tr>
                     <td>${escapar(String(item.fecha_movimiento || "").replace("T", " ").slice(0, 16))}</td>
                     <td>${escapar(item.tipo_movimiento)}</td>
                     <td><strong>${escapar(item.producto)}</strong><small class="inventory-table__secondary">${escapar(item.lote)}</small></td>
-                    <td>${escapar(`${item.origen_tipo || ""} ${item.origen_id || ""}`)}</td>
-                    <td>${escapar(`${item.destino_tipo || ""} ${item.destino_id || ""}`)}</td>
+                    <td>${escapar(ubicacionMovimiento(item.origen_tipo, item.origen_id))}</td>
+                    <td>${escapar(ubicacionMovimiento(item.destino_tipo, item.destino_id))}</td>
                     <td>${numero(item.cantidad_capturada ?? item.cantidad)} ${item.tipo_captura === "PRESENTACION" ? escapar(item.presentacion || "presentación") : escapar(item.unidad_base || "")}</td>
-                    <td>${numero(item.cantidad)} ${escapar(item.unidad_base || "")}</td>
+                    <td><strong>${numero(item.cantidad)} ${escapar(item.unidad_base || "")}</strong><small class="inventory-table__secondary">${escapar(equivalenciaMovimiento(item))}</small></td>
                     <td>${escapar(item.observaciones || "")}</td>
                 </tr>
             `).join("")}</tbody>

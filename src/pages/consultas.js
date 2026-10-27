@@ -1245,29 +1245,31 @@ function renderizarDetalleOperativo() {
                     )}
 
                     ${crearResumenDetalle(
-                        "Viviendas",
-                        totales.viviendas ??
-                        totales.viviendas_visitadas ??
-                        totales.viviendas_trabajadas ??
-                        0
+                        "Viviendas visitadas",
+                        totales.viviendas_visitadas ?? 0
                     )}
 
                     ${crearResumenDetalle(
-                        "Habitantes",
+                        "Viviendas trabajadas",
+                        totales.viviendas_trabajadas ?? 0
+                    )}
+
+                    ${crearResumenDetalle(
+                        "Habitantes beneficiados",
                         totales.habitantes ??
                         totales.habitantes_beneficiados ??
                         0
                     )}
 
                     ${crearResumenDetalle(
-                        "Perros",
+                        "Perros censados",
                         totales.perros ??
                         totales.perros_censados ??
                         0
                     )}
 
                     ${crearResumenDetalle(
-                        "Gatos",
+                        "Gatos censados",
                         totales.gatos ??
                         totales.gatos_censados ??
                         0
@@ -1283,10 +1285,12 @@ function renderizarDetalleOperativo() {
                         totales.verificaciones
                     )}
 
-                    ${crearResumenDetalle(
-                        "Animales intervenidos",
-                        totales.animales_intervenidos
-                    )}
+                    ${totales.animales_intervenidos != null
+                        ? crearResumenDetalle(
+                            "Animales intervenidos",
+                            totales.animales_intervenidos
+                        )
+                        : ""}
                 </section>
 
                 <section class="detail-section">
@@ -1458,197 +1462,82 @@ function crearDetalleManzana(manzana) {
 }
 
 
-function crearDetalleActividadNueva(
-    actividad
-) {
-    const insumos =
-        obtenerArreglo(
-            actividad.insumos ||
-            actividad.consumos
-        );
+function crearDetalleActividadNueva(actividad) {
+    const insumos = obtenerArreglo(actividad.insumos || actividad.consumos);
+    const codigo = String(actividad.codigo_actividad || "").toUpperCase();
+    const nombre = String(actividad.actividad || "").toLowerCase();
+    const encuesta = /ENCUESTA|ENTOMO/.test(codigo) || /encuesta|entomol/.test(nombre);
+    const ecto = /ECTO/.test(codigo) || /ectodesparasit/.test(nombre);
+    const rociado = /ROCIADO|ROCIAMIENTO/.test(codigo) || /rociado|rociamiento/.test(nombre);
+    const vacuna = /VACUN/.test(codigo) || /vacun/.test(nombre);
+    const esteril = /ESTERIL/.test(codigo) || /esteriliz/.test(nombre);
 
-    const rangosVacunacion =
-        insumos.flatMap(
-            insumo =>
-                obtenerArreglo(
-                    insumo.rangos_folios
-                )
-        );
+    // Las métricas se eligen por actividad, nunca por el simple hecho de ser > 0.
+    const encuestaCampos = [
+        ["Viviendas con perros", "viviendas_con_perros"],
+        ["Viviendas con gatos", "viviendas_con_gatos"],
+        ["Viviendas con perros y gatos", "viviendas_con_perros_gatos"],
+        ["Viviendas sin animales", "viviendas_sin_animales"],
+        ["Viviendas encuestadas", "viviendas_encuestadas"],
+        ["Viviendas inspeccionadas", "viviendas_inspeccionadas"],
+        ["Viviendas con garrapatas", "viviendas_con_garrapata"],
+        ["Perros inspeccionados", "perros_inspeccionados"],
+        ["Perros con garrapatas", "perros_con_garrapata"],
+        ["Perros con pulgas", "perros_con_pulgas"],
+        ["Gatos inspeccionados", "gatos_inspeccionados"],
+        ["Gatos con garrapatas", "gatos_con_garrapata"],
+        ["Gatos con pulgas", "gatos_con_pulgas"],
+        ["Garrapatas en viviendas", "garrapatas_en_viviendas"],
+        ["Garrapatas en perros", "garrapatas_en_perros"],
+        ["Garrapatas en gatos", "garrapatas_en_gatos"],
+        ["Larvas encontradas", "larvas_encontradas"],
+        ["Ninfas encontradas", "ninfas_encontradas"],
+        ["Adultos encontrados", "adultos_encontrados"],
+        ["Muestras enviadas", "muestras_enviadas"],
+        ["Garrapatas positivas", "garrapatas_positivas"],
+        ["Ejemplares enviados", "ejemplares_enviados"],
+        ["Ejemplares positivos", "ejemplares_positivos"]
+    ];
+    const campos = encuesta ? encuestaCampos
+        : ecto ? [["Viviendas ectodesparasitadas", "viviendas_ectodesparasitadas"], ["Perros ectodesparasitados", "perros_intervenidos"], ["Gatos ectodesparasitados", "gatos_intervenidos"]]
+        : rociado ? [["Viviendas rociadas", "viviendas_rociadas"]]
+        : vacuna ? [["Perros vacunados", "perros_intervenidos"], ["Gatos vacunados", "gatos_intervenidos"]]
+        : esteril ? [["Perros esterilizados", "perros_intervenidos"], ["Gatos esterilizados", "gatos_intervenidos"]]
+        : [["Viviendas cubiertas", "viviendas_cubiertas"]];
 
-    return `
-        <article class="detail-item">
+    const metricas = campos.filter(([, clave]) => actividad[clave] !== null && actividad[clave] !== undefined)
+        .map(([etiqueta, clave]) => `<p>${escaparHTML(etiqueta)}: <strong>${formatearEntero(actividad[clave])}</strong></p>`).join("");
 
-            <div class="detail-item__header">
-                <strong>
-                    ${escaparHTML(
-                        actividad.actividad ||
-                        actividad.codigo_actividad ||
-                        "Actividad"
-                    )}
-                </strong>
+    const rangosVacunacion = insumos.flatMap(i => obtenerArreglo(i.rangos_folios));
+    const rangosEsterilizacion = obtenerArreglo(actividad.rangos_esterilizacion);
+    const formatearRangos = rangos => rangos.map(r => `${r.folio_desde}–${r.folio_hasta}`).join(", ");
+    const filasInsumos = insumos.map(insumo => {
+        const producto = escaparHTML(insumo.producto || insumo.codigo_producto || "Insumo");
+        const lote = insumo.lote ? ` · Lote ${escaparHTML(insumo.lote)}` : "";
+        const capturada = insumo.cantidad_capturada ?? insumo.cantidad;
+        const base = insumo.cantidad ?? insumo.cantidad_base;
+        const contenido = insumo.contenido_presentacion;
+        const unidad = escaparHTML(insumo.unidad || "");
+        const porPresentacion = String(insumo.tipo_captura || "").toUpperCase() === "PRESENTACION";
+        const detalle = porPresentacion
+            ? `${formatearDecimal(capturada ?? 0)} presentación(es)` +
+              (contenido != null ? ` × ${formatearDecimal(contenido)} ${unidad}` : "") +
+              (base != null ? ` = <strong>${formatearDecimal(base)} ${unidad}</strong>` : "")
+            : `${formatearDecimal(capturada ?? base ?? 0)} ${unidad}`;
+        return `<li>${producto}${lote} · ${detalle}</li>`;
+    }).join("");
 
-                <span>
-                    ${formatearFecha(
-                        actividad.fecha
-                    )}
-                </span>
-            </div>
-
-            <p>
-                Viviendas cubiertas:
-                <strong>
-                    ${formatearEntero(
-                        actividad.viviendas_cubiertas ?? 0
-                    )}
-                </strong>
-            </p>
-
-            ${
-                Number(
-                    actividad.viviendas_encuestadas || 0
-                ) > 0
-                    ? `
-                        <p>
-                            Viviendas encuestadas:
-                            <strong>
-                                ${formatearEntero(
-                                    actividad.viviendas_encuestadas
-                                )}
-                            </strong>
-                        </p>
-                    `
-                    : ""
-            }
-
-            ${
-                Number(
-                    actividad.viviendas_rociadas || 0
-                ) > 0
-                    ? `
-                        <p>
-                            Viviendas rociadas:
-                            <strong>
-                                ${formatearEntero(
-                                    actividad.viviendas_rociadas
-                                )}
-                            </strong>
-                        </p>
-                    `
-                    : ""
-            }
-
-            ${
-                Number(
-                    actividad.viviendas_ectodesparasitadas || 0
-                ) > 0
-                    ? `
-                        <p>
-                            Viviendas ectodesparasitadas:
-                            <strong>
-                                ${formatearEntero(
-                                    actividad.viviendas_ectodesparasitadas
-                                )}
-                            </strong>
-                        </p>
-                    `
-                    : ""
-            }
-
-            ${
-                Number(
-                    actividad.perros_intervenidos || 0
-                ) > 0 ||
-                Number(
-                    actividad.gatos_intervenidos || 0
-                ) > 0
-                    ? `
-                        <p>
-                            Perros:
-                            <strong>
-                                ${formatearEntero(
-                                    actividad.perros_intervenidos ?? 0
-                                )}
-                            </strong>
-                            ·
-                            Gatos:
-                            <strong>
-                                ${formatearEntero(
-                                    actividad.gatos_intervenidos ?? 0
-                                )}
-                            </strong>
-                        </p>
-                    `
-                    : ""
-            }
-
-            ${
-                rangosVacunacion.length > 0
-                    ? `
-                        <p>
-                            Folios de vacunación:
-                            <strong>
-                                ${escaparHTML(
-                                    rangosVacunacion
-                                        .map(
-                                            rango =>
-                                                `${rango.folio_desde}–${rango.folio_hasta}`
-                                        )
-                                        .join(", ")
-                                )}
-                            </strong>
-                        </p>
-                    `
-                    : ""
-            }
-
-            ${
-                insumos.length > 0
-                    ? `
-                        <ul class="detail-consumption-list">
-                            ${insumos.map(
-                                insumo => `
-                                    <li>
-                                        ${escaparHTML(
-                                            insumo.producto ||
-                                            insumo.codigo_producto ||
-                                            "Insumo"
-                                        )}
-                                        ${
-                                            insumo.lote
-                                                ? ` · ${escaparHTML(insumo.lote)}`
-                                                : ""
-                                        }
-                                        ·
-                                        ${formatearDecimal(
-                                            insumo.cantidad_capturada ??
-                                            insumo.cantidad ??
-                                            0
-                                        )}
-                                        ${escaparHTML(
-                                            insumo.unidad || ""
-                                        )}
-                                    </li>
-                                `
-                            ).join("")}
-                        </ul>
-                    `
-                    : ""
-            }
-
-            ${
-                actividad.observaciones
-                    ? `
-                        <p>
-                            ${escaparHTML(
-                                actividad.observaciones
-                            )}
-                        </p>
-                    `
-                    : ""
-            }
-
-        </article>
-    `;
+    return `<article class="detail-item">
+        <div class="detail-item__header">
+            <strong>${escaparHTML(actividad.actividad || actividad.codigo_actividad || "Actividad")}</strong>
+            <span>${formatearFecha(actividad.fecha)}</span>
+        </div>
+        ${metricas}
+        ${rangosVacunacion.length ? `<p>Folios de vacunación: <strong>${escaparHTML(formatearRangos(rangosVacunacion))}</strong></p>` : ""}
+        ${rangosEsterilizacion.length ? `<p>Folios de esterilización: <strong>${escaparHTML(formatearRangos(rangosEsterilizacion))}</strong></p>` : ""}
+        ${filasInsumos ? `<ul class="detail-consumption-list">${filasInsumos}</ul>` : ""}
+        ${actividad.observaciones ? `<p>${escaparHTML(actividad.observaciones)}</p>` : ""}
+    </article>`;
 }
 
 function crearDetalleVivienda(vivienda) {

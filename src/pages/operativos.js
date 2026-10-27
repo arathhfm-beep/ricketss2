@@ -2113,7 +2113,7 @@ function crearFormularioInsumos(
                                                     )}
                                                 </span>
 
-                                                <span>
+                                                <span data-consumption-available>
                                                     <strong>
                                                         Disponible:
                                                     </strong>
@@ -2124,7 +2124,7 @@ function crearFormularioInsumos(
 
                                                     ${escaparHTML(
                                                         unidad
-                                                    )}
+                                                    )}${equivalenciaPresentacionesConsumo(existencia, obtenerContenidoPresentacion(lote), presentacion)}
                                                 </span>
 
                                                 <span
@@ -2291,10 +2291,87 @@ function crearPasoResumen() {
                 ${crearDatoResumen("Perros censados", resumen.perros_censados)}
                 ${crearDatoResumen("Gatos censados", resumen.gatos_censados)}
                 ${crearDatoResumen("Actividades", resumen.actividades)}
-                ${crearDatoResumen("Consumos", resumen.insumos)}
+                ${crearDatoResumen("Registros de consumo de insumos", resumen.insumos)}
             </div>
+            ${crearDesgloseActividadesResumen(ESTADO.jornada)}
+            <p class="review-note">Los registros de consumo indican cuántos insumos se capturaron, no la cantidad total utilizada. Las cantidades y unidades se consultan en el detalle de cada actividad.</p>
         </div>
     `;
+}
+
+/**
+ * Vista previa por actividad basada en los mismos campos del formulario.
+ * No altera el estado, el payload de guardado ni las existencias.
+ */
+function crearDesgloseActividadesResumen(jornada) {
+    const definiciones = {
+        encuesta: [
+            ["Viviendas solo con perros", "viviendas_con_perros"],
+            ["Viviendas solo con gatos", "viviendas_con_gatos"],
+            ["Viviendas con perros y gatos", "viviendas_con_perros_gatos"],
+            ["Viviendas sin animales", "viviendas_sin_animales"],
+            ["Viviendas inspeccionadas", "viviendas_inspeccionadas"],
+            ["Viviendas con garrapata", "viviendas_con_garrapata"],
+            ["Perros inspeccionados", "perros_inspeccionados"],
+            ["Perros con garrapata", "perros_con_garrapata"],
+            ["Perros con pulgas", "perros_con_pulgas"],
+            ["Gatos inspeccionados", "gatos_inspeccionados"],
+            ["Gatos con garrapata", "gatos_con_garrapata"],
+            ["Gatos con pulgas", "gatos_con_pulgas"],
+            ["Garrapatas en viviendas", "garrapatas_en_viviendas"],
+            ["Garrapatas en perros", "garrapatas_en_perros"],
+            ["Garrapatas en gatos", "garrapatas_en_gatos"],
+            ["Larvas", "larvas_encontradas"],
+            ["Ninfas", "ninfas_encontradas"],
+            ["Adultos", "adultos_encontrados"],
+            ["Muestras enviadas", "muestras_enviadas"],
+            ["Garrapatas positivas", "garrapatas_positivas"],
+            ["Ejemplares enviados", "ejemplares_enviados"],
+            ["Ejemplares positivos", "ejemplares_positivos"]
+        ],
+        ecto: [["Viviendas ectodesparasitadas", "viviendas_ectodesparasitadas"], ["Perros ectodesparasitados", "perros_intervenidos"], ["Gatos ectodesparasitados", "gatos_intervenidos"]],
+        rociado: [["Viviendas rociadas", "viviendas_rociadas"]],
+        vacuna: [["Perros vacunados", "perros_intervenidos"], ["Gatos vacunados", "gatos_intervenidos"]],
+        esteril: [["Perros esterilizados", "perros_intervenidos"], ["Gatos esterilizados", "gatos_intervenidos"]]
+    };
+    const bloques = [];
+    (jornada.sectores || []).forEach((sector, is) => {
+        (sector.manzanas || []).forEach((manzana, im) => {
+            (manzana.actividades || []).forEach((actividad, ia) => {
+                const nombre = obtenerNombreTipoActividad(actividad.tipo_actividad_id) || "Actividad sin seleccionar";
+                const codigo = String(obtenerCodigoTipoActividad(actividad.tipo_actividad_id) || "").toUpperCase();
+                const texto = (codigo + " " + nombre).toUpperCase();
+                const grupo = /ENCUESTA|ENTOMO|GARRAPATA|MUESTRA/.test(texto) ? "encuesta"
+                    : /ECTO/.test(texto) ? "ecto"
+                    : /ROCIAD|ROCIAM/.test(texto) ? "rociado"
+                    : /VACUN/.test(texto) ? "vacuna"
+                    : /ESTERIL/.test(texto) ? "esteril" : null;
+                const campos = definiciones[grupo] || [["Viviendas cubiertas", "viviendas_cubiertas"]];
+                const indicadores = campos.filter(([, campo]) => actividad[campo] !== null && actividad[campo] !== undefined)
+                    .map(([etiqueta, campo]) => `<li>${escaparHTML(etiqueta)}: <strong>${escaparHTML(String(actividad[campo]))}</strong></li>`).join("");
+                const insumos = (Array.isArray(actividad.insumos) ? actividad.insumos : []).map(insumo => {
+                    const cantidad = Number(insumo.cantidad_capturada ?? insumo.cantidad ?? 0);
+                    const contenido = Number(insumo.contenido_presentacion);
+                    const presentacion = String(insumo.tipo_captura || "").toUpperCase() === "PRESENTACION";
+                    const base = Number(insumo.cantidad);
+                    const unidad = escaparHTML(insumo.unidad || "");
+                    const detalle = presentacion
+                        ? `${formatearCantidad(cantidad)} presentación(es)` +
+                          (Number.isFinite(contenido) && contenido > 0 ? ` × ${formatearCantidad(contenido)} ${unidad}` : "") +
+                          (Number.isFinite(base) ? ` = ${formatearCantidad(base)} ${unidad}` : "")
+                        : `${formatearCantidad(cantidad)} ${unidad}`;
+                    return `<li>Insumo${insumo.lote ? ` (lote ${escaparHTML(insumo.lote)})` : ""}: ${detalle}</li>`;
+                }).join("");
+                bloques.push(`<details class="review-activity" style="margin:12px 0;padding:12px;border:1px solid #ddd;border-radius:8px">
+                    <summary><strong>${escaparHTML(nombre)}</strong> · Sector ${is + 1}, manzana ${im + 1}, actividad ${ia + 1}</summary>
+                    <ul>${indicadores || "<li>Sin indicadores capturados</li>"}${insumos}</ul>
+                </details>`);
+            });
+        });
+    });
+    return bloques.length ? `<section class="step-panel"><h3>Desglose por actividad (revisión antes de guardar)</h3>
+        <p>Los valores se muestran tal como están capturados. Los consumos son informativos; no representan un nuevo descuento.</p>
+        ${bloques.join("")}</section>` : "";
 }
 
 function crearDatoResumen(etiqueta, valor) {
@@ -2628,6 +2705,13 @@ function registrarEventosActividades() {
     registrarEventosRangosEsterilizacion();
 }
 
+function equivalenciaPresentacionesConsumo(cantidad, contenido, nombre) {
+    const factor = Number(contenido);
+    if (!Number.isFinite(factor) || factor <= 0) return "";
+    const presentaciones = Number(cantidad) / factor;
+    return ` (${formatearCantidad(presentaciones)} presentaciones equivalentes de ${escaparHTML(nombre || "la presentación seleccionada")})`;
+}
+
 function actualizarResumenConsumoEnFila(elemento, insumo) {
     const selector = [
         '[data-consumption-summary="true"]',
@@ -2646,16 +2730,21 @@ function actualizarResumenConsumoEnFila(elemento, insumo) {
     const cantidadBase = decimalSeguro(insumo.cantidad);
     const unidad = normalizarTexto(insumo.unidad) || "";
     const existenciaPosterior = Math.max(0, existencia - cantidadBase);
+    const contenido = decimalSeguro(insumo.contenido_presentacion);
+    const nombre = insumo.presentacion || "presentación";
+    const equivalencia = cantidad => equivalenciaPresentacionesConsumo(cantidad, contenido, nombre);
+    const disponible = resumen.querySelector("[data-consumption-available]");
+    if (disponible) disponible.innerHTML = `<strong>Disponible:</strong> ${formatearCantidad(existencia)} ${escaparHTML(unidad)}${equivalencia(existencia)}`;
 
     const base = resumen.querySelector("[data-consumption-base]");
     const posterior = resumen.querySelector("[data-consumption-after]");
 
     if (base) {
-        base.innerHTML = `<strong>Se descontará:</strong> ${formatearCantidad(cantidadBase)} ${escaparHTML(unidad)}`;
+        base.innerHTML = `<strong>Se descontará:</strong> ${formatearCantidad(cantidadBase)} ${escaparHTML(unidad)}${equivalencia(cantidadBase)}`;
     }
 
     if (posterior) {
-        posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}`;
+        posterior.innerHTML = `<strong>Existencia posterior:</strong> ${formatearCantidad(existenciaPosterior)} ${escaparHTML(unidad)}${equivalencia(existenciaPosterior)}`;
     }
 }
 
@@ -5381,7 +5470,7 @@ function calcularResumenJornada(jornada) {
             total.perros_censados += enteroSeguro(manzana.resumen?.perros_censados);
             total.gatos_censados += enteroSeguro(manzana.resumen?.gatos_censados);
             total.actividades += manzana.actividades.length;
-            total.insumos += manzana.actividades.reduce((suma, actividad) => suma + actividad.insumos.length, 0);
+            total.insumos += manzana.actividades.reduce((suma, actividad) => suma + (Array.isArray(actividad.insumos) ? actividad.insumos.length : 0), 0);
         });
     });
 

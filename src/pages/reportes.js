@@ -790,6 +790,8 @@ function renderizarResultados() {
 
         </header>
 
+        ${crearNotaInterpretacionReporte()}
+
         <div class="reports-table-wrapper">
 
             ${crearTablaReporte()}
@@ -802,6 +804,27 @@ function renderizarResultados() {
     registrarEventosPaginacion();
 }
 
+
+/* Aclaraciones basadas en los campos realmente devueltos por la RPC. */
+function crearNotaInterpretacionReporte() {
+    const tipo = String(ESTADO.reporte.tipo_reporte || "").toUpperCase();
+    if (tipo === "ACTIVIDADES") {
+        return `<p class="reports-interpretation-note" role="note">
+            <strong>Registros de consumo:</strong> cantidad de movimientos de insumos
+            asociados a la actividad; no representa gramos, mililitros ni presentaciones.
+            Para revisar cantidades por producto y lote, utiliza el reporte Consumos.
+        </p>`;
+    }
+    if (tipo === "CONSUMOS") {
+        return `<p class="reports-interpretation-note" role="note">
+            <strong>Cantidad capturada:</strong> valor introducido en el formulario.
+            Si el tipo de captura es PRESENTACION, representa presentaciones;
+            <strong>cantidad base</strong> expresa su equivalencia en la unidad indicada.
+            No se deben sumar productos o unidades distintas.
+        </p>`;
+    }
+    return "";
+}
 
 function crearTablaReporte() {
     const registros =
@@ -849,12 +872,9 @@ function crearTablaReporte() {
                             ${columnas.map(
                                 columna => `
                                     <td>
-                                        ${crearValorCelda(
-                                            registro[
-                                                columna
-                                            ],
-                                            columna
-                                        )}
+                                        ${columna === "indicadores_capturados"
+                                            ? crearCeldaIndicadoresCompacta(registro[columna])
+                                            : crearValorCelda(registro[columna], columna)}
                                     </td>
                                 `
                             ).join("")}
@@ -868,6 +888,74 @@ function crearTablaReporte() {
     `;
 }
 
+
+const ETIQUETAS_INDICADORES_REPORTE = {
+    "viviendas_con_perros": "Viviendas solo con perros",
+    "viviendas_con_gatos": "Viviendas solo con gatos",
+    "viviendas_con_perros_gatos": "Viviendas con perros y gatos",
+    "viviendas_sin_animales": "Viviendas sin animales",
+    "viviendas_inspeccionadas": "Viviendas inspeccionadas",
+    "viviendas_con_garrapata": "Viviendas con garrapata",
+    "perros_inspeccionados": "Perros inspeccionados",
+    "perros_con_garrapata": "Perros con garrapata",
+    "gatos_inspeccionados": "Gatos inspeccionados",
+    "gatos_con_garrapata": "Gatos con garrapata",
+    "perros_con_pulgas": "Perros con pulgas",
+    "gatos_con_pulgas": "Gatos con pulgas",
+    "garrapatas_en_viviendas": "Garrapatas en viviendas",
+    "garrapatas_en_perros": "Garrapatas en perros",
+    "garrapatas_en_gatos": "Garrapatas en gatos",
+    "larvas_encontradas": "Larvas encontradas",
+    "ninfas_encontradas": "Ninfas encontradas",
+    "adultos_encontrados": "Adultos encontrados",
+    "ejemplares_enviados": "Ejemplares enviados",
+    "ejemplares_positivos": "Ejemplares positivos",
+    "viviendas_ectodesparasitadas": "Viviendas trabajadas con animales",
+    "perros_intervenidos": "Perros intervenidos",
+    "gatos_intervenidos": "Gatos intervenidos",
+    "viviendas_rociadas": "Viviendas rociadas",
+    "viviendas_cubiertas": "Viviendas cubiertas"
+};
+
+/* Los indicadores permanecen disponibles sin expandir la altura del renglón. */
+function crearCeldaIndicadoresCompacta(valor) {
+    if (valor === null || valor === undefined ||
+        (typeof valor === "object" && !Object.keys(valor).length)) {
+        return '<span class="reports-empty-value">—</span>';
+    }
+    return `<details class="reports-indicadores-detalle" style="position:relative;min-width:110px;max-width:360px">
+        <summary style="cursor:pointer;white-space:nowrap;color:inherit;font-weight:600">Ver indicadores</summary>
+        <div style="max-height:260px;overflow:auto;white-space:normal;padding:10px 0;min-width:240px">
+            ${Object.entries(valor).map(([clave, dato]) => `<div style="padding:3px 0"><strong>${escaparHTML(ETIQUETAS_INDICADORES_REPORTE[clave] || clave.replace(/_/g, " "))}:</strong> ${escaparHTML(dato === null ? "—" : String(dato))}</div>`).join("")}
+        </div>
+    </details>`;
+}
+
+/* Para exportación: una columna por indicador, sin JSON compacto. */
+function expandirIndicadoresParaCSV(registros, columnas) {
+    const claves = new Set();
+    for (const fila of registros) {
+        const indicadores = fila?.indicadores_capturados;
+        if (indicadores && typeof indicadores === "object" && !Array.isArray(indicadores)) {
+            Object.keys(indicadores).forEach(clave => claves.add(clave));
+        }
+    }
+    const ordenadas = [...claves].sort((a, b) => a.localeCompare(b, "es"));
+    const nuevasColumnas = columnas.filter(c => c !== "indicadores_capturados");
+    for (const clave of ordenadas) nuevasColumnas.push(`indicador_${clave}`);
+    const nuevasFilas = registros.map(fila => {
+        const salida = {...fila};
+        delete salida.indicadores_capturados;
+        const indicadores = fila.indicadores_capturados || {};
+        for (const clave of ordenadas) {
+            const valor = indicadores[clave];
+            salida[`indicador_${clave}`] = valor === null || valor === undefined ? "" :
+                typeof valor === "object" ? JSON.stringify(valor) : valor;
+        }
+        return salida;
+    });
+    return {registros: nuevasFilas, columnas: nuevasColumnas};
+}
 
 /*
 ==========================================================
@@ -920,13 +1008,7 @@ function crearValorCelda(
     if (
         typeof valor === "object"
     ) {
-        return `
-            <code class="reports-json-value">
-                ${escaparHTML(
-                    JSON.stringify(valor)
-                )}
-            </code>
-        `;
+        return crearDetalleEstructuradoReporte(valor);
     }
 
     if (
@@ -973,6 +1055,30 @@ function crearValorCelda(
             ${escaparHTML(texto)}
         </span>
     `;
+}
+
+
+/* Presentación de datos estructurados sin modificar sus valores originales. */
+function crearDetalleEstructuradoReporte(valor) {
+    if (Array.isArray(valor) && valor.length === 0) return "—";
+    if (!Array.isArray(valor) && Object.keys(valor).length === 0) return "—";
+
+    const presentar = (dato, profundidad = 0) => {
+        if (dato === null || dato === undefined || dato === "") return "—";
+        if (typeof dato !== "object") return escaparHTML(String(dato));
+        // Evitar tablas excesivamente anidadas, sin perder el valor original.
+        if (profundidad >= 3) return `<code class="reports-json-value">${escaparHTML(JSON.stringify(dato))}</code>`;
+        if (Array.isArray(dato)) {
+            if (!dato.length) return "—";
+            return `<ol class="reports-structured-list">${dato.map(elemento => `<li>${presentar(elemento, profundidad + 1)}</li>`).join("")}</ol>`;
+        }
+        return `<dl class="reports-structured-detail">${Object.entries(dato).map(([clave, contenido]) => `
+            <div class="reports-structured-row">
+                <dt>${escaparHTML(formatearNombreColumna(clave))}</dt>
+                <dd>${presentar(contenido, profundidad + 1)}</dd>
+            </div>`).join("")}</dl>`;
+    };
+    return presentar(valor);
 }
 
 
@@ -1196,10 +1302,15 @@ async function procesarExportacion() {
             );
         }
 
+        const datosExportacion =
+            String(reporte.tipo_reporte || "").toUpperCase() === "ACTIVIDADES"
+                ? expandirIndicadoresParaCSV(reporte.registros, reporte.columnas)
+                : {registros: reporte.registros, columnas: reporte.columnas};
+
         const csv =
             convertirReporteCSV(
-                reporte.registros,
-                reporte.columnas
+                datosExportacion.registros,
+                datosExportacion.columnas
             );
 
         const nombre =
@@ -1896,6 +2007,15 @@ function esColumnaNumerica(
 function formatearNombreColumna(
     columna
 ) {
+    const etiquetas = {
+        registros_consumo: "Registros de consumo (movimientos)",
+        cantidad_capturada: "Cantidad capturada",
+        cantidad_base: "Cantidad en unidad base",
+        contenido_presentacion: "Contenido por presentación",
+        tipo_captura: "Tipo de captura",
+        unidad: "Unidad base"
+    };
+    if (etiquetas[columna]) return etiquetas[columna];
     return String(columna || "")
         .replaceAll("_", " ")
         .replace(

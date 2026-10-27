@@ -1179,14 +1179,14 @@ function crearSeccionConsumos() {
 
     return crearSeccionIndicadores(
         "Consumo de insumos",
-        "Consumo en actividades ordinarias y verificaciones.",
+        "Registros de actividades y verificaciones. Las cantidades base de diferentes unidades no deben interpretarse como una sola magnitud física.",
         [
             [
                 "Registros de consumo",
                 datos.registros
             ],
             [
-                "Cantidad total",
+                "Cantidad total (unidades base mixtas)",
                 formatearDecimal(
                     datos.cantidad_total
                 )
@@ -1510,6 +1510,7 @@ function crearSeccionConsumosProducto() {
                                                     item.unidad ||
                                                     ""
                                                 )}
+                                                ${Number(item.contenido_presentacion) > 0 ? `<small class="inventory-table__secondary">${formatearDecimal(numeroSeguro(item.cantidad) / Number(item.contenido_presentacion))} presentaciones equivalentes · ${escaparHTML(item.presentacion || "presentación")}</small>` : ""}
                                             </span>
 
                                         </div>
