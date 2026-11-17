@@ -24,6 +24,9 @@ const MATRIZ_PERMISOS = Object.freeze({
 
     SUPERVISOR: {
         consultar: true,
+        consultar_distribuciones_vacunas: true,
+        registrar_distribuciones_vacunas: true,
+        comprobar_folios_vacunas: true,
         consultar_estado: true,
 
         registrar_operativos: true,
@@ -41,6 +44,9 @@ const MATRIZ_PERMISOS = Object.freeze({
 
     JURISDICCIONAL: {
         consultar: true,
+        consultar_distribuciones_vacunas: true,
+        registrar_distribuciones_vacunas: true,
+        comprobar_folios_vacunas: true,
         consultar_estado: false,
 
         registrar_operativos: true,
@@ -58,6 +64,9 @@ const MATRIZ_PERMISOS = Object.freeze({
 
     ADMINISTRATIVO: {
         consultar: true,
+        consultar_distribuciones_vacunas: true,
+        registrar_distribuciones_vacunas: false,
+        comprobar_folios_vacunas: false,
         consultar_estado: false,
 
         registrar_operativos: false,
@@ -75,6 +84,9 @@ const MATRIZ_PERMISOS = Object.freeze({
 
     EPIDEMIOLOGO: {
         consultar: true,
+        consultar_distribuciones_vacunas: true,
+        registrar_distribuciones_vacunas: false,
+        comprobar_folios_vacunas: false,
         consultar_estado: false,
 
         registrar_operativos: false,
@@ -278,3 +290,6 @@ export {
     ROLES,
     MATRIZ_PERMISOS
 };
+export function puedeConsultarDistribucionesVacunas(usuario) { return tienePermiso(usuario, "consultar_distribuciones_vacunas"); }
+export function puedeRegistrarDistribucionesVacunas(usuario) { return tienePermiso(usuario, "registrar_distribuciones_vacunas"); }
+export function puedeComprobarFoliosVacunas(usuario) { return tienePermiso(usuario, "comprobar_folios_vacunas"); }

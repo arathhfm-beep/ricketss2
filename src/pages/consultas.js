@@ -1177,6 +1177,20 @@ function renderizarDetalleOperativo() {
         detalle.manzanas
     );
 
+    const actividadesDetalle = manzanas.flatMap(m => obtenerArreglo(m.actividades));
+    const tipoActividad = actividad => {
+        const identificador = `${actividad.codigo_actividad || ""} ${actividad.actividad || ""}`.toUpperCase();
+        if (/ECTO|ECTODESPARASIT/.test(identificador)) return "ecto";
+        if (/ROCIADO|ROCIAMIENTO/.test(identificador)) return "rociado";
+        if (/VACUN/.test(identificador)) return "vacuna";
+        if (/ESTERIL/.test(identificador)) return "esteril";
+        if (/ENCUESTA|ENTOMO/.test(identificador)) return "encuesta";
+        return "otro";
+    };
+    const sumarActividad = (campo, tipo) => actividadesDetalle
+        .filter(actividad => tipoActividad(actividad) === tipo)
+        .reduce((total, actividad) => total + (Number(actividad[campo]) || 0), 0);
+
     abrirModal(`
         <div class="detail-modal">
 
@@ -1292,6 +1306,31 @@ function renderizarDetalleOperativo() {
                         )
                         : ""}
                 </section>
+
+                 <section class="detail-section">
+                     <h3>Información general</h3>
+                     <div class="detail-summary">
+                         ${crearResumenDetalle("Folio operativo", operativo.folio_operativo)}
+                         ${crearResumenDetalle("Localidad", operativo.localidad)}
+                         ${crearResumenDetalle("Domicilio", operativo.domicilio)}
+                         ${crearResumenDetalle("Municipio (clave)", operativo.cve_mpo_res)}
+                         ${crearResumenDetalle("Fecha de término", formatearFecha(operativo.fecha_fin))}
+                         ${crearResumenDetalle("Responsable de captura", operativo.usuario_creador)}
+                         ${crearResumenDetalle("Observaciones", operativo.observaciones)}
+                     </div>
+                     <h3>Resultados de intervenciones</h3>
+                     <div class="detail-summary">
+                         ${crearResumenDetalle("Viviendas rociadas", sumarActividad("viviendas_rociadas", "rociado"))}
+                         ${crearResumenDetalle("Viviendas ectodesparasitadas", sumarActividad("viviendas_ectodesparasitadas", "ecto"))}
+                         ${crearResumenDetalle("Viviendas encuestadas", sumarActividad("viviendas_encuestadas", "encuesta"))}
+                         ${crearResumenDetalle("Perros ectodesparasitados", sumarActividad("perros_intervenidos", "ecto"))}
+                         ${crearResumenDetalle("Gatos ectodesparasitados", sumarActividad("gatos_intervenidos", "ecto"))}
+                         ${crearResumenDetalle("Perros vacunados", sumarActividad("perros_intervenidos", "vacuna"))}
+                         ${crearResumenDetalle("Gatos vacunados", sumarActividad("gatos_intervenidos", "vacuna"))}
+                         ${crearResumenDetalle("Perros esterilizados", sumarActividad("perros_intervenidos", "esteril"))}
+                         ${crearResumenDetalle("Gatos esterilizados", sumarActividad("gatos_intervenidos", "esteril"))}
+                     </div>
+                 </section>
 
                 <section class="detail-section">
                     <h3>Manzanas y viviendas</h3>
@@ -1423,6 +1462,14 @@ function crearDetalleManzana(manzana) {
                         resumen.viviendas_renuentes ?? 0
                     )}
 
+                     ${crearResumenDetalle("Lotes baldíos", resumen.lotes_baldios ?? 0)}
+                     ${crearResumenDetalle("Otros inmuebles", resumen.otros_inmuebles ?? 0)}
+                     ${crearResumenDetalle("Viviendas con animales", resumen.viviendas_con_animales ?? 0)}
+                     ${crearResumenDetalle("Viviendas con perros", resumen.viviendas_con_perros ?? 0)}
+                     ${crearResumenDetalle("Viviendas con gatos", resumen.viviendas_con_gatos ?? 0)}
+                     ${crearResumenDetalle("Viviendas con perros y gatos", resumen.viviendas_con_perros_gatos ?? 0)}
+                     ${crearResumenDetalle("Viviendas sin animales", resumen.viviendas_sin_animales ?? 0)}
+
                     ${crearResumenDetalle(
                         "Habitantes beneficiados",
                         resumen.habitantes_beneficiados ?? 0
@@ -1498,15 +1545,35 @@ function crearDetalleActividadNueva(actividad) {
         ["Ejemplares enviados", "ejemplares_enviados"],
         ["Ejemplares positivos", "ejemplares_positivos"]
     ];
+    // Cada actividad tiene su propio conjunto de indicadores.
+    // No mostrar campos de otros componentes aunque la RPC devuelva valores.
     const campos = encuesta ? encuestaCampos
-        : ecto ? [["Viviendas ectodesparasitadas", "viviendas_ectodesparasitadas"], ["Perros ectodesparasitados", "perros_intervenidos"], ["Gatos ectodesparasitados", "gatos_intervenidos"]]
+        : ecto ? [
+            ["Viviendas ectodesparasitadas", "viviendas_ectodesparasitadas"],
+            ["Perros ectodesparasitados", "perros_intervenidos"],
+            ["Gatos ectodesparasitados", "gatos_intervenidos"]
+        ]
         : rociado ? [["Viviendas rociadas", "viviendas_rociadas"]]
-        : vacuna ? [["Perros vacunados", "perros_intervenidos"], ["Gatos vacunados", "gatos_intervenidos"]]
-        : esteril ? [["Perros esterilizados", "perros_intervenidos"], ["Gatos esterilizados", "gatos_intervenidos"]]
+        : vacuna ? [
+            ["Perros vacunados", "perros_intervenidos"],
+            ["Gatos vacunados", "gatos_intervenidos"]
+        ]
+        : esteril ? [
+            ["Perros esterilizados", "perros_intervenidos"],
+            ["Gatos esterilizados", "gatos_intervenidos"]
+        ]
         : [["Viviendas cubiertas", "viviendas_cubiertas"]];
-
-    const metricas = campos.filter(([, clave]) => actividad[clave] !== null && actividad[clave] !== undefined)
-        .map(([etiqueta, clave]) => `<p>${escaparHTML(etiqueta)}: <strong>${formatearEntero(actividad[clave])}</strong></p>`).join("");
+    const metricas = campos
+        .filter(([, clave]) => actividad[clave] != null)
+        .map(([etiqueta, clave]) => `<p>${escaparHTML(etiqueta)}: <strong>${formatearEntero(actividad[clave])}</strong></p>`)
+        .join("");
+    const personal = [
+        ["Brigadista 1", "brigadista1"],
+        ["Brigadista 2", "brigadista2"],
+        ["Supervisor", "supervisor"]
+    ].filter(([, clave]) => actividad[clave])
+     .map(([etiqueta, clave]) => `<p>${escaparHTML(etiqueta)}: ${escaparHTML(actividad[clave])}</p>`)
+     .join("");
 
     const rangosVacunacion = insumos.flatMap(i => obtenerArreglo(i.rangos_folios));
     const rangosEsterilizacion = obtenerArreglo(actividad.rangos_esterilizacion);
@@ -1532,7 +1599,8 @@ function crearDetalleActividadNueva(actividad) {
             <strong>${escaparHTML(actividad.actividad || actividad.codigo_actividad || "Actividad")}</strong>
             <span>${formatearFecha(actividad.fecha)}</span>
         </div>
-        ${metricas}
+        ${metricas || "<p>Sin indicadores cuantitativos registrados.</p>"}
+        ${personal}
         ${rangosVacunacion.length ? `<p>Folios de vacunación: <strong>${escaparHTML(formatearRangos(rangosVacunacion))}</strong></p>` : ""}
         ${rangosEsterilizacion.length ? `<p>Folios de esterilización: <strong>${escaparHTML(formatearRangos(rangosEsterilizacion))}</strong></p>` : ""}
         ${filasInsumos ? `<ul class="detail-consumption-list">${filasInsumos}</ul>` : ""}

@@ -48,6 +48,7 @@ const PASOS = Object.freeze([
 const ESTADO = {
     cargando: false,
     guardando: false,
+    consumosEliminados: [],
     pasoActual: 1,
     modoRegistro: null,
     catalogos: null,
@@ -315,6 +316,7 @@ function crearInsumoInicial() {
 function reiniciarEstado() {
     ESTADO.cargando = false;
     ESTADO.guardando = false;
+    ESTADO.consumosEliminados = [];
     ESTADO.pasoActual = 1;
     ESTADO.modoRegistro = null;
     ESTADO.catalogos = null;
@@ -428,6 +430,13 @@ function renderizarSelectorModo() {
                             "Retomar operativo",
                             "Agregar una continuación, verificación o reintervención."
                         )}
+                        <button id="btn-distribuir-vacunas" class="operation-flow-card" type="button">
+                            <span class="operation-flow-card__content">
+                                <strong>Distribuir vacunas</strong>
+                                <span>Asignar lotes completos y dar seguimiento a los talonarios.</span>
+                            </span>
+                            <span class="operation-flow-card__arrow">→</span>
+                        </button>
                     </div>
                 </section>
             </main>
@@ -443,6 +452,10 @@ function renderizarSelectorModo() {
     document.getElementById("btn-operation-home")?.addEventListener(
         "click",
         () => navegar("/inicio")
+    );
+    document.getElementById("btn-distribuir-vacunas")?.addEventListener(
+        "click",
+        () => navegar("/vacunas/distribucion")
     );
 }
 
@@ -2618,7 +2631,18 @@ function registrarEventosActividades() {
     document.querySelectorAll("[data-eliminar-insumo]").forEach(boton => {
         boton.addEventListener("click", () => {
             const actividad = obtenerActividadPorElemento(boton);
-            actividad?.insumos.splice(Number(boton.dataset.eliminarInsumo), 1);
+            if (!actividad) return;
+            const indice = Number(boton.dataset.eliminarInsumo);
+            const insumo = actividad.insumos[indice];
+            if (!insumo) return;
+            if (ESTADO.editandoJornada && insumo.id) {
+                ESTADO.consumosEliminados.push({
+                    actividad_id: actividad.id,
+                    id: insumo.id,
+                    accion: "ELIMINAR"
+                });
+            }
+            actividad.insumos.splice(indice, 1);
             renderizarCapturaJornadaActual();
         });
     });
@@ -2631,6 +2655,15 @@ function registrarEventosActividades() {
                 return;
             }
 
+            const valorAnterior = campo === "cantidad_capturada"
+                ? decimalSeguro(insumo.cantidad_capturada)
+                : String(insumo[campo] ?? "");
+            const valorNuevo = campo === "cantidad_capturada"
+                ? decimalSeguro(elemento.value)
+                : String(normalizarTexto(elemento.value) ?? "");
+            if (ESTADO.editandoJornada && insumo.id && valorAnterior !== valorNuevo) {
+                marcarInsumoVacunacionModificado(insumo);
+            }
             if (campo === "cantidad_capturada") {
                 insumo.cantidad_capturada = decimalSeguro(elemento.value);
             } else {
@@ -5339,8 +5372,9 @@ function construirPayloadEdicionJornadaActual(
                                             actividad.id || null,
 
                                         insumos:
-                                            actividad.insumos.map(
-                                                insumo => ({
+                                            [...actividad.insumos, ...ESTADO.consumosEliminados
+                                                .filter(c => c.actividad_id === actividad.id)]
+                                                .map(insumo => ({
                                                     ...insumo,
 
                                                     id:

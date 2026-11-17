@@ -1479,7 +1479,13 @@ export async function editarJornadaOperativo(token, jornadaId, datos = {}) {
                             return { id: insumo.id, accion: "SIN_CAMBIO" };
                         }
                         const accion = String(insumo.accion || "AGREGAR").toUpperCase();
-                        if (accion === "SIN_CAMBIO") return { id: insumo.id, accion };
+                        if (accion === "SIN_CAMBIO" || accion === "ELIMINAR") {
+                            if (!insumo.id) throw new Error(`El insumo ${j + 1} requiere un identificador para ${accion}.`);
+                            return { id: insumo.id, accion };
+                        }
+                        if (accion === "AGREGAR" && insumo.id) {
+                            throw new Error("Un insumo existente no puede enviarse como AGREGAR.");
+                        }
                         const construido = construirInsumoActividad(insumo, j);
                         return { ...construido, id: normalizarTexto(insumo.id), accion };
                     })

@@ -13,6 +13,10 @@ import {
 } from "../pages/operativos.js";
 
 import {
+    mostrarDistribucionVacunas
+} from "../pages/distribucion-vacunas.js";
+
+import {
     mostrarConsultas
 } from "../pages/consultas.js";
 
@@ -58,6 +62,7 @@ const RUTAS_PUBLICAS = new Set([
 const RUTAS_PROTEGIDAS = new Set([
     "/inicio",
     "/operativos/nuevo",
+    "/vacunas/distribucion",
     "/consultas",
     "/inventarios",
     "/inventarios/movimientos",
@@ -305,6 +310,10 @@ async function renderizarRutaProtegida(
 
         case "/operativos/nuevo":
             await mostrarRegistrarOperativo();
+            break;
+
+        case "/vacunas/distribucion":
+            await mostrarDistribucionVacunas();
             break;
 
         case "/consultas":
